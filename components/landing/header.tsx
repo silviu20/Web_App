@@ -61,7 +61,7 @@ export default function Header() {
         >
           <Receipt className="size-6" />
           <Link href="/" className="text-xl font-bold">
-            Receipt AI
+            SynSilicO™
           </Link>
         </motion.div>
 

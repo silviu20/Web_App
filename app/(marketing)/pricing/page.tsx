@@ -42,7 +42,7 @@ export default async function PricingPage() {
       <div className="mx-auto grid max-w-4xl grid-cols-1 gap-8 md:grid-cols-2">
         <PricingCard
           title="Monthly Plan"
-          price="$10"
+          price="€80"
           description="Perfect for individuals and small teams"
           buttonText="Subscribe Monthly"
           buttonLink={
@@ -54,7 +54,7 @@ export default async function PricingPage() {
         />
         <PricingCard
           title="Yearly Plan"
-          price="$100"
+          price="€800"
           description="Save 17% with annual billing"
           buttonText="Subscribe Yearly"
           buttonLink={process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_YEARLY || "#"}

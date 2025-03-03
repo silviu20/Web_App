@@ -105,7 +105,7 @@ export async function Footer() {
 
         <div className="text-muted-foreground mt-12 pt-8 text-center">
           <p>
-            &copy; {new Date().getFullYear()} Your Company. All rights reserved.
+            &copy; {new Date().getFullYear()} SynSilico. All rights reserved.
           </p>
         </div>
       </div>

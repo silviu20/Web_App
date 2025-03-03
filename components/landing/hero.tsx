@@ -48,7 +48,7 @@ export const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
           className="text-balance text-6xl font-bold"
         >
-          Receipt AI
+          SynSilicO™
         </motion.div>
 
         <motion.div
@@ -57,7 +57,8 @@ export const HeroSection = () => {
           transition={{ duration: 0.6, delay: 0.6, ease: "easeOut" }}
           className="max-w-xl text-balance text-xl"
         >
-          Transform receipts and invoices into organized data instantly with AI.
+          Adaptive experimental design that cuts through cost and optimizes
+          production processes.
         </motion.div>
 
         <motion.div
@@ -82,7 +83,7 @@ export const HeroSection = () => {
       >
         <HeroVideoDialog
           animationStyle="top-in-bottom-out"
-          videoSrc="https://www.youtube.com/embed/9yS0dR0kP-s"
+          videoSrc="https://www.youtube.com/embed/7lhrLatrgjQ?si=5KRDvZ861wr3m9_y"
           thumbnailSrc="hero.png"
           thumbnailAlt="Hero Video"
         />
