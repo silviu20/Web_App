@@ -21,7 +21,10 @@ const navLinks = [
   { href: "/about", label: "About" },
   { href: "/features", label: "Features" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/contact", label: "Contact" }
+  { href: "/contact", label: "Contact" },
+  { href: "/tutorials", label: "Tutorials" },
+  { href: "/case-studies", label: "Case Studies" },
+  { href: "/faq", label: "FAQ" }
 ]
 
 const signedInLinks = [{ href: "/dashboard", label: "Dashboard" }]
