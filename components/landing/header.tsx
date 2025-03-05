@@ -23,8 +23,8 @@ const navLinks = [
   { href: "/pricing", label: "Pricing" },
   { href: "/contact", label: "Contact" },
   { href: "/tutorials", label: "Tutorials" },
-  { href: "/case-studies", label: "Case Studies" },
-  { href: "/faq", label: "FAQ" }
+  { href: "/case-studies", label: "Case Studies" }
+  // { href: "/faq", label: "FAQ" }
 ]
 
 const signedInLinks = [{ href: "/dashboard", label: "Dashboard" }]
