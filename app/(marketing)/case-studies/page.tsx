@@ -50,7 +50,7 @@ export default async function CaseStudiesPage() {
                 </p>
                 <Button className="hover:opacity-90">
                   <a href="#">
-                    View Success Story
+                    View Success Story here
                     <span className="ml-2">→</span>
                   </a>
                 </Button>
