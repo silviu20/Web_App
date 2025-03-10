@@ -1,5 +1,5 @@
 /*
-This server layout provides the dashboard structure with sidebar navigation.
+This server layout provides the dashboard structure with collapsible sidebar navigation.
 */
 
 "use server"
@@ -21,7 +21,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-screen w-full overflow-hidden">
       <DashboardSidebar />
       <main className="flex-1 overflow-auto p-6">{children}</main>
     </div>

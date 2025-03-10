@@ -1,10 +1,10 @@
 /*
-This client component provides the dashboard sidebar with navigation and account section.
+This client component provides the dashboard sidebar with navigation, account section, and collapsible functionality.
 */
 
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
@@ -22,7 +22,10 @@ import {
   LineChart,
   FileCog,
   Sun,
-  Moon
+  Moon,
+  ChevronLeft,
+  ChevronRight,
+  Menu
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useTheme } from "next-themes"
@@ -36,6 +39,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip"
 
 const dashboardLinks = [
   { href: "/dashboard/home", label: "Home", icon: <Home className="size-5" /> },
@@ -62,6 +71,28 @@ export function DashboardSidebar() {
   const { theme, setTheme } = useTheme()
   const [accountExpanded, setAccountExpanded] = useState(false)
   const router = useRouter()
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Check if we're on mobile
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+      if (window.innerWidth < 768) {
+        setCollapsed(true)
+      }
+    }
+
+    // Check initially
+    checkMobile()
+
+    // Add event listener
+    window.addEventListener("resize", checkMobile)
+
+    // Clean up
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
   // Get user initials for avatar fallback
   const getInitials = () => {
@@ -73,107 +104,169 @@ export function DashboardSidebar() {
     return `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`
   }
 
-  const handleSignOut = async () => {
-    router.push("/login")
-  }
-
   return (
-    <div className="bg-sidebar border-sidebar-border flex w-64 flex-col border-r">
+    <div
+      className={cn(
+        "bg-sidebar border-sidebar-border flex h-screen flex-col border-r transition-all duration-300",
+        collapsed ? "w-[70px]" : "w-64"
+      )}
+    >
       {/* Logo and App name */}
-      <div className="flex items-center gap-2 p-6">
-        <LayoutDashboard className="size-6" />
-        <span className="text-xl font-bold">SynSilicO™</span>
+      <div
+        className={cn(
+          "flex items-center gap-2 p-4 transition-all",
+          collapsed ? "justify-center" : ""
+        )}
+      >
+        <LayoutDashboard className="size-6 shrink-0" />
+        {!collapsed && (
+          <span className="whitespace-nowrap text-xl font-bold">
+            SynSilicO™
+          </span>
+        )}
       </div>
 
+      {/* Collapse/expand button */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(
+          "my-2 mr-2 size-8 self-end p-0",
+          collapsed && "mr-0 self-center"
+        )}
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        {collapsed ? (
+          <ChevronRight className="size-4" />
+        ) : (
+          <ChevronLeft className="size-4" />
+        )}
+      </Button>
+
       {/* Main navigation */}
-      <nav className="flex-1 px-4 py-2">
+      <nav className="flex-1 p-2">
         <ul className="space-y-1">
           {dashboardLinks.map(link => (
             <li key={link.href}>
-              <Link
-                href={link.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  pathname === link.href
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-accent/50 hover:text-accent-foreground"
-                )}
-              >
-                {link.icon}
-                <span>{link.label}</span>
-              </Link>
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={link.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md py-2 text-sm font-medium transition-colors",
+                        pathname === link.href
+                          ? "bg-accent text-accent-foreground"
+                          : "hover:bg-accent/50 hover:text-accent-foreground",
+                        collapsed ? "justify-center px-2" : "px-3"
+                      )}
+                    >
+                      {link.icon}
+                      {!collapsed && (
+                        <span className="truncate">{link.label}</span>
+                      )}
+                    </Link>
+                  </TooltipTrigger>
+                  {collapsed && (
+                    <TooltipContent side="right">{link.label}</TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </li>
           ))}
         </ul>
       </nav>
 
       {/* User account section */}
-      <div className="mt-auto border-t p-4">
+      <div className="mt-auto border-t p-2">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="hover:bg-accent/50 w-full justify-start px-3"
-              onClick={() => setAccountExpanded(!accountExpanded)}
-            >
-              <div className="flex w-full items-center">
-                <Avatar className="mr-2 size-8">
-                  <AvatarImage
-                    src={user?.imageUrl}
-                    alt={user?.fullName || ""}
-                  />
-                  <AvatarFallback>{getInitials()}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium">
-                    {user?.fullName || user?.emailAddresses?.[0]?.emailAddress}
-                  </p>
-                  <p className="text-muted-foreground text-xs">Free Plan</p>
-                </div>
-                {accountExpanded ? (
-                  <ChevronUp className="size-4" />
-                ) : (
-                  <ChevronDown className="size-4" />
-                )}
-              </div>
-            </Button>
-          </DropdownMenuTrigger>
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "hover:bg-accent/50 w-full justify-start truncate",
+                      collapsed ? "px-2" : "px-3"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center",
+                        collapsed ? "w-full justify-center" : "w-full"
+                      )}
+                    >
+                      <Avatar className={cn("size-8", collapsed ? "" : "mr-2")}>
+                        <AvatarImage
+                          src={user?.imageUrl}
+                          alt={user?.fullName || ""}
+                        />
+                        <AvatarFallback>{getInitials()}</AvatarFallback>
+                      </Avatar>
+                      {!collapsed && (
+                        <>
+                          <div className="flex-1 text-left">
+                            <p className="truncate text-sm font-medium">
+                              {user?.fullName ||
+                                user?.emailAddresses?.[0]?.emailAddress}
+                            </p>
+                            <p className="text-muted-foreground text-xs">
+                              Free Plan
+                            </p>
+                          </div>
+                          <ChevronDown className="size-4" />
+                        </>
+                      )}
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              {collapsed && (
+                <TooltipContent side="right">
+                  {user?.fullName || user?.emailAddresses?.[0]?.emailAddress}
+                  <br />
+                  <span className="text-muted-foreground text-xs">
+                    Free Plan
+                  </span>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
 
             {/* Theme Toggle */}
-            <DropdownMenuItem className="flex cursor-default justify-between p-2">
-              <span>Theme</span>
-              <div className="flex items-center space-x-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => setTheme("light")}
-                >
-                  <Sun
-                    className={cn(
-                      "size-4",
-                      theme === "dark" && "text-muted-foreground"
-                    )}
-                  />
-                  <span className="sr-only">Light</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => setTheme("dark")}
-                >
-                  <Moon
-                    className={cn(
-                      "size-4",
-                      theme === "light" && "text-muted-foreground"
-                    )}
-                  />
-                  <span className="sr-only">Dark</span>
-                </Button>
+            <DropdownMenuItem className="focus:bg-background cursor-default">
+              <div className="flex w-full flex-col space-y-1">
+                <span className="mb-1 text-sm font-medium">Theme</span>
+                <div className="flex flex-col space-y-1">
+                  <label className="flex cursor-pointer items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="theme"
+                      checked={theme === "light"}
+                      onChange={() => setTheme("light")}
+                      className="size-4"
+                    />
+                    <span className="flex items-center text-sm">
+                      <Sun className="mr-1 size-4" /> Light
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="theme"
+                      checked={theme === "dark"}
+                      onChange={() => setTheme("dark")}
+                      className="size-4"
+                    />
+                    <span className="flex items-center text-sm">
+                      <Moon className="mr-1 size-4" /> Dark
+                    </span>
+                  </label>
+                </div>
               </div>
             </DropdownMenuItem>
 
