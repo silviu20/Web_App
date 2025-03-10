@@ -1,5 +1,6 @@
 /*
-This client component provides the dashboard sidebar with navigation, account section, and collapsible functionality.
+This client component provides the dashboard sidebar with navigation, account section, 
+collapsible functionality, and subscription promotion.
 */
 
 "use client"
@@ -45,6 +46,7 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from "@/components/ui/tooltip"
+import { SubscriptionPromo } from "@/components/dashboard/subscription-promo"
 
 const dashboardLinks = [
   { href: "/dashboard/home", label: "Home", icon: <Home className="size-5" /> },
@@ -72,6 +74,26 @@ export function DashboardSidebar() {
   const [accountExpanded, setAccountExpanded] = useState(false)
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+
+  // This will be replaced with actual user subscription data in a real implementation
+  // For demo purposes, we're determining it randomly here
+  const [userTier, setUserTier] = useState<
+    "trial" | "basic" | "advanced" | "expert"
+  >("trial")
+  const [trialDaysLeft, setTrialDaysLeft] = useState(14)
+
+  // In a real app, you'd fetch this from your backend
+  useEffect(() => {
+    // Simulate fetching user tier - in a real app, get this from your API
+    const tiers = ["trial", "basic", "advanced", "expert"] as const
+    const randomTier = tiers[Math.floor(Math.random() * 2)] // Mostly trial or basic for demo
+    setUserTier(randomTier)
+
+    // Random days left in trial
+    if (randomTier === "trial") {
+      setTrialDaysLeft(Math.floor(Math.random() * 14) + 1)
+    }
+  }, [])
 
   // Check if we're on mobile
   const [isMobile, setIsMobile] = useState(false)
@@ -104,6 +126,22 @@ export function DashboardSidebar() {
     return `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`
   }
 
+  // Get plan name based on tier
+  const getPlanName = () => {
+    switch (userTier) {
+      case "trial":
+        return "Trial"
+      case "basic":
+        return "Basic Plan"
+      case "advanced":
+        return "Advanced Plan"
+      case "expert":
+        return "Expert Plan"
+      default:
+        return "Free Plan"
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -131,7 +169,7 @@ export function DashboardSidebar() {
         variant="ghost"
         size="sm"
         className={cn(
-          "my-2 mr-2 size-8 self-end p-0",
+          "my-1 mr-2 size-8 self-end p-0",
           collapsed && "mr-0 self-center"
         )}
         onClick={() => setCollapsed(!collapsed)}
@@ -177,6 +215,13 @@ export function DashboardSidebar() {
         </ul>
       </nav>
 
+      {/* Subscription promo section */}
+      <SubscriptionPromo
+        currentTier={userTier}
+        trialDaysLeft={trialDaysLeft}
+        isCollapsed={collapsed}
+      />
+
       {/* User account section */}
       <div className="mt-auto border-t p-2">
         <DropdownMenu>
@@ -212,7 +257,7 @@ export function DashboardSidebar() {
                                 user?.emailAddresses?.[0]?.emailAddress}
                             </p>
                             <p className="text-muted-foreground text-xs">
-                              Free Plan
+                              {getPlanName()}
                             </p>
                           </div>
                           <ChevronDown className="size-4" />
@@ -227,7 +272,7 @@ export function DashboardSidebar() {
                   {user?.fullName || user?.emailAddresses?.[0]?.emailAddress}
                   <br />
                   <span className="text-muted-foreground text-xs">
-                    Free Plan
+                    {getPlanName()}
                   </span>
                 </TooltipContent>
               )}
