@@ -6,6 +6,12 @@ This client component provides the header for the app.
 
 import { Button } from "@/components/ui/button"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
+import {
   SignedIn,
   SignedOut,
   SignInButton,
@@ -13,18 +19,19 @@ import {
   UserButton
 } from "@clerk/nextjs"
 import { motion } from "framer-motion"
-import { Menu, Receipt, X } from "lucide-react"
+import { ChevronDown, Menu, Receipt, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 
 const navLinks = [
   { href: "/about", label: "About" },
-  { href: "/features", label: "Features" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/contact", label: "Contact" },
+  { href: "/pricing", label: "Pricing" }
+]
+
+const resourceLinks = [
   { href: "/tutorials", label: "Tutorials" },
-  { href: "/case-studies", label: "Case Studies" }
-  // { href: "/faq", label: "FAQ" }
+  { href: "/case-studies", label: "Case Studies" },
+  { href: "/features", label: "Features" }
 ]
 
 const signedInLinks = [{ href: "/dashboard", label: "Dashboard" }]
@@ -68,7 +75,7 @@ export default function Header() {
           </Link>
         </motion.div>
 
-        <nav className="absolute left-1/2 hidden -translate-x-1/2 space-x-2 md:flex">
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 space-x-4 md:flex">
           {navLinks.map(link => (
             <motion.div
               key={link.href}
@@ -84,46 +91,47 @@ export default function Header() {
             </motion.div>
           ))}
 
-          <SignedIn>
-            {signedInLinks.map(link => (
-              <motion.div
-                key={link.href}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                className="text-muted-foreground hover:text-foreground flex items-center rounded-full px-3 py-1 transition"
               >
-                <Link
-                  href={link.href}
-                  className="text-muted-foreground hover:text-foreground rounded-full px-3 py-1 transition"
-                >
-                  {link.label}
-                </Link>
-              </motion.div>
-            ))}
-          </SignedIn>
+                Resources <ChevronDown className="ml-1 size-4" />
+              </motion.button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center">
+              {resourceLinks.map(link => (
+                <DropdownMenuItem key={link.href} asChild>
+                  <Link href={link.href}>{link.label}</Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </nav>
 
         <div className="flex items-center space-x-4">
           <SignedOut>
-            <SignInButton>
+            <Link href="/dashboard">
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Button variant="ghost">Sign In</Button>
+                <Button>Dashboard</Button>
               </motion.div>
-            </SignInButton>
-
-            <SignUpButton>
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Button>Get Started</Button>
-              </motion.div>
-            </SignUpButton>
+            </Link>
           </SignedOut>
 
           <SignedIn>
+            <Link href="/dashboard/home">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button>Dashboard</Button>
+              </motion.div>
+            </Link>
             <UserButton />
           </SignedIn>
 
@@ -176,6 +184,20 @@ export default function Header() {
                 </Link>
               </li>
             ))}
+
+            <li className="pt-2 font-medium">Resources</li>
+            {resourceLinks.map(link => (
+              <li key={link.href} className="pl-2">
+                <Link
+                  href={link.href}
+                  className="block hover:underline"
+                  onClick={toggleMenu}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+
             <SignedIn>
               {signedInLinks.map(link => (
                 <li key={link.href}>
