@@ -19,7 +19,7 @@ import {
   UserButton
 } from "@clerk/nextjs"
 import { motion } from "framer-motion"
-import { ChevronDown, Menu, Receipt, X } from "lucide-react"
+import { ChevronDown, Menu, Receipt, X, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 
@@ -118,7 +118,9 @@ export default function Header() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Button>Dashboard</Button>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  Dashboard <ArrowRight className="ml-1 size-4" />
+                </Button>
               </motion.div>
             </Link>
           </SignedOut>
@@ -129,7 +131,9 @@ export default function Header() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Button>Dashboard</Button>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  Dashboard <ArrowRight className="ml-1 size-4" />
+                </Button>
               </motion.div>
             </Link>
             <UserButton />

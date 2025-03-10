@@ -104,12 +104,13 @@ export function SubscriptionPromo({
         <Badge
           variant="outline"
           className={cn(
-            "bg-opacity-15 text-xs font-medium",
+            "bg-opacity/15 text-xs font-medium",
             currentTierInfo.color
           )}
         >
           {currentTierInfo.name}
         </Badge>
+
         {currentTier === "trial" && (
           <span className="text-xs font-medium text-amber-500">
             {trialDaysLeft} days left
