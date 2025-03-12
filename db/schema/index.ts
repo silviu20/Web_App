@@ -1,8 +1,5 @@
-/*
-Exports the database schema for the app.
-*/
-
+// db/schema/index.ts
+// Export all schema definitions for easy importing
 export * from "./profiles-schema"
-
-// Add  new schemas
 export * from "./optimizations-schema"
+// Add other schema exports as needed

@@ -17,6 +17,7 @@ import { getOptimizationsAction } from "@/actions/db/optimizations-actions"
 import { checkAPIHealth } from "@/actions/optimization-actions"
 import Link from "next/link"
 import { formatDistanceToNow } from "date-fns"
+import { OptimizationCard } from "@/components/dashboard/optimization-card"
 
 export default async function OptimizationsPage() {
   const { userId } = await auth()
@@ -86,81 +87,12 @@ export default async function OptimizationsPage() {
 
       {/* Optimizations Grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {optimizations.map(optimization => (
-          <Link
-            href={`/dashboard/optimizations/${optimization.id}`}
+        {optimizations.map((optimization, index) => (
+          <OptimizationCard
             key={optimization.id}
-            className="block transition-transform hover:scale-[1.02]"
-          >
-            <Card className="h-full">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between">
-                  <CardTitle className="truncate">
-                    {optimization.name}
-                  </CardTitle>
-                  <div
-                    className={`size-2 rounded-full ${
-                      optimization.status === "active"
-                        ? "bg-green-500"
-                        : optimization.status === "paused"
-                          ? "bg-amber-500"
-                          : optimization.status === "completed"
-                            ? "bg-blue-500"
-                            : "bg-gray-500"
-                    }`}
-                  />
-                </div>
-                <CardDescription className="truncate">
-                  {optimization.description || "No description provided"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm">Target:</div>
-                    <div className="flex items-center font-medium">
-                      {optimization.targetName}
-                      {optimization.targetMode === "MAX" ? (
-                        <ArrowUp className="ml-1 size-4 text-green-500" />
-                      ) : (
-                        <ArrowDown className="ml-1 size-4 text-red-500" />
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm">Status:</div>
-                    <div className="font-medium capitalize">
-                      {optimization.status}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm">Created:</div>
-                    <div className="text-sm">
-                      {formatDistanceToNow(new Date(optimization.createdAt), {
-                        addSuffix: true
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="bg-muted/40 flex items-center justify-between border-t p-2">
-                <div className="text-muted-foreground flex items-center text-sm">
-                  <Beaker className="mr-1 size-4" />
-                  <span>
-                    Parameters: {optimization.config.parameters.length}
-                  </span>
-                </div>
-                <Button variant="ghost" size="sm" asChild>
-                  <div>
-                    <Activity className="mr-1 size-4" />
-                    View Details
-                  </div>
-                </Button>
-              </CardFooter>
-            </Card>
-          </Link>
+            optimization={optimization}
+            index={index}
+          />
         ))}
       </div>
 

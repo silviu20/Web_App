@@ -2,6 +2,8 @@
 This client component provides a blurred dashboard background.
 */
 
+/*24124*/
+
 "use client"
 
 export function BlurredDashboardBackground() {

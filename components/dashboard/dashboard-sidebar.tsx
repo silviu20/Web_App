@@ -56,8 +56,8 @@ const dashboardLinks = [
     icon: <Beaker className="size-5" />
   },
   {
-    href: "/dashboard/optimization",
-    label: "Optimization",
+    href: "/dashboard/optimizations",
+    label: "Optimizations",
     icon: <FileCog className="size-5" />
   },
   {

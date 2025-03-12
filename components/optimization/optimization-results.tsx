@@ -49,6 +49,7 @@ import {
   SelectMeasurement,
   SelectOptimization
 } from "@/db/schema/optimizations-schema"
+import { ParameterImpactChart } from "@/components/optimization/parameter-impact-chart"
 
 // Helper function to format data for the chart
 const formatChartData = (measurements: SelectMeasurement[]) => {
@@ -312,6 +313,16 @@ export function OptimizationResults({
             )}
           </CardContent>
         </Card>
+
+        {/* Parameter Impact Analysis */}
+        {measurements.length > 0 && (
+          <ParameterImpactChart
+            measurements={measurements}
+            parameterNames={parameterNames}
+            targetName={optimization.targetName}
+            targetMode={optimization.targetMode}
+          />
+        )}
 
         {/* Summary Stats Card */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
