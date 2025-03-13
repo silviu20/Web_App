@@ -15,6 +15,13 @@
       "when": 1741786875308,
       "tag": "0001_lying_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1741793673497,
+      "tag": "0002_graceful_agent_zero",
+      "breakpoints": true
     }
   ]
 }
