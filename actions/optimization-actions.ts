@@ -338,3 +338,48 @@ export async function getInsightsAction(
     };
   }
 }
+export async function checkAPIHealth() {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_BAYBE_API_URL;
+    if (!apiUrl) {
+      console.error("API URL not configured");
+      return { 
+        isSuccess: false, 
+        message: "API URL not configured" 
+      };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(`${apiUrl}/health`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.BAYBE_API_KEY}`,
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      return { 
+        isSuccess: false, 
+        message: `API returned status: ${response.status}` 
+      };
+    }
+    
+    const data = await response.json();
+    return { isSuccess: true, data };
+  } catch (error) {
+    const message = error instanceof Error 
+      ? (error.name === 'AbortError' 
+          ? 'API request timed out' 
+          : error.message)
+      : 'Unknown error occurred';
+      
+    console.error("API Health check error:", message);
+    return { isSuccess: false, message };
+  }
+}
