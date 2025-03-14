@@ -1,78 +1,134 @@
 // types/optimization-types.ts
-
-// Parameter types
-export type NumericalDiscreteParameter = {
+export interface Parameter {
   name: string
-  type: "NumericalDiscrete"
-  values: number[]
+  type: string
+  values?: (number | string)[]
+  bounds?: [number, number]
+  encoding?: string
   tolerance?: number
+  description?: string
 }
 
-export type NumericalContinuousParameter = {
+export type TargetMode = "MAX" | "MIN" | "MATCH"
+
+export interface Target {
   name: string
-  type: "NumericalContinuous"
-  bounds: [number, number]
+  mode: TargetMode
+  bounds?: [number, number]
+  type?: "Numerical" | "Binary"
+  weight?: number
 }
 
-export type CategoricalParameter = {
-  name: string
-  type: "CategoricalParameter"
-  values: string[]
-  encoding?: "OHE" | "LE"
-}
-
-export type Parameter =
-  | NumericalDiscreteParameter
-  | NumericalContinuousParameter
-  | CategoricalParameter
-
-// Target configuration
-export type TargetConfig = {
-  name: string
-  mode: "MAX" | "MIN"
-  bounds?: {
-    lower?: number
-    upper?: number
-  }
-}
-
-// Constraint types
-export type ConstraintConfig = {
+export interface Condition {
   type: string
-  parameters: string[]
-  [key: string]: any
+  threshold?: number
+  parameter?: string
+  values?: any[]
 }
 
-// Recommender configuration types
-export type RecommenderConfig = {
+export interface Constraint {
   type: string
-  [key: string]: any
+  parameters?: string[]
+  conditions?: Condition[]
+  condition?: Condition
+  weight?: number
+  constraint_func?: string
+  description?: string
 }
 
-export type TwoPhaseRecommenderConfig = {
-  type: "TwoPhaseMetaRecommender"
-  initial_recommender: {
-    type: string
-    [key: string]: any
-  }
-  recommender: {
-    type: string
-    n_restarts?: number
-    n_raw_samples?: number
-    [key: string]: any
-  }
+export interface SurrogateConfig {
+  type: string
+  kernel?: Record<string, any>
+  normalize_targets?: boolean
 }
 
-// Complete optimization configuration
-export type OptimizationConfig = {
+export interface AcquisitionConfig {
+  type: string
+  beta?: number
+}
+
+export interface RecommenderConfig {
+  type: string
+  initial_recommender?: Record<string, any>
+  recommender?: Record<string, any>
+  n_restarts?: number
+  n_raw_samples?: number
+  switch_after?: number
+  remain_switched?: boolean
+}
+
+export interface OptimizationConfig {
   parameters: Parameter[]
-  target_config: TargetConfig
-  recommender_config?: RecommenderConfig | TwoPhaseRecommenderConfig
-  constraints?: ConstraintConfig[]
+  target_config: Target | Target[]
+  recommender_config?: RecommenderConfig
+  constraints?: Constraint[]
+  objective_type?: "SingleTarget" | "Desirability" | "Pareto"
+  surrogate_config?: SurrogateConfig
+  acquisition_config?: AcquisitionConfig
 }
 
-// Measurement types
-export type MeasurementInput = {
+export interface Measurement {
   parameters: Record<string, any>
   target_value: number
 }
+
+export interface OptimizationStatus {
+  status: string
+  message: string
+  optimizer_id?: string
+  parameter_count?: number
+  constraint_count?: number
+}
+
+export interface Suggestion {
+  status: string
+  suggestions: Record<string, any>[]
+  batch_size: number
+}
+
+export interface BestPoint {
+  status: string
+  best_parameters?: Record<string, any>
+  best_value?: number
+  total_measurements?: number
+}
+
+export interface MeasurementHistory {
+  status: string
+  measurements: Record<string, any>[]
+}
+
+export interface CampaignInfo {
+  status: string
+  info: {
+    parameters: any[]
+    target: any
+    measurements_count: number
+  }
+}
+
+export interface OptimizationList {
+  status: string
+  optimizers: {
+    id: string
+    file_path: string
+  }[]
+}
+
+export interface FeatureImportance {
+  status: string
+  feature_importance: Record<string, number>
+}
+
+export interface PredictionResult {
+  status: string
+  predictions: Record<string, any>[]
+}
+
+export interface ExportResult {
+  status: string
+  data: any
+}
+
+// Add the types to index.ts
+export * from "./optimization-types"

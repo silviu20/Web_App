@@ -22,6 +22,9 @@ import {
   createInsightAction
 } from "@/actions/db/optimizations-actions";
 
+// Import GPU availability checker
+import { checkGPUAvailability } from "@/actions/gpu-availability";
+
 import { 
   createSearchSpace, 
   processParameters, 

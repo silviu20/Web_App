@@ -1,3 +1,4 @@
+// components/dashboard/optimization-card.tsx
 "use client"
 
 import { motion } from "framer-motion"
@@ -44,7 +45,7 @@ export function OptimizationCard({
   }
 
   // Parameter count
-  const parameterCount = optimization.config.parameters.length
+  const parameterCount = optimization.config?.parameters?.length || 0
 
   return (
     <motion.div
@@ -62,7 +63,9 @@ export function OptimizationCard({
               <CardTitle className="truncate">{optimization.name}</CardTitle>
               <div
                 className={`size-2 rounded-full ${
-                  statusColors[optimization.status as keyof typeof statusColors]
+                  statusColors[
+                    optimization.status as keyof typeof statusColors
+                  ] || statusColors.draft
                 }`}
               />
             </div>

@@ -1,157 +1,340 @@
-// actions/optimization-actions.ts
 "use server"
 
-import { ActionState } from "@/types";
-import { auth } from "@clerk/nextjs/server";
+// actions/db/optimizations-actions.ts
+import { db } from "@/db/db";
 import { 
-  checkAPIHealthAction,
-  createOptimizationAction,
-  getSuggestionAction,
-  addMeasurementAction,
-  addMultipleMeasurementsAction,
-  getBestPointAction,
-  loadOptimizationAction 
-} from "@/lib/api/baybe-client";
+  optimizationsTable, 
+  measurementsTable,
+  InsertOptimization,
+  SelectOptimization,
+  InsertMeasurement,
+  SelectMeasurement,
+  insightsTable,
+  InsertInsight
+} from "@/db/schema/optimizations-schema";
+import { ActionState } from "@/types";
+import { eq, desc } from "drizzle-orm";
 
-/**
- * Checks the health status of the BayBE API
- */
-export async function checkAPIHealth(): Promise<
-  ActionState<{ status: string; using_gpu: boolean; gpu_info?: any }>
-> {
-  return checkAPIHealthAction();
-}
-
-/**
- * Creates a new optimization with the given configuration
- */
-export async function createOptimization(
-  optimizerName: string,
-  config: {
-    parameters: any[];
-    target_config: any;
-    recommender_config?: any;
-    constraints?: any[];
-  }
-): Promise<ActionState<{ status: string; message: string; constraint_count?: number }>> {
-  // Get the current user ID from Clerk
-  const { userId } = await auth();
-  
-  if (!userId) {
+// Create a new optimization
+export async function createOptimizationDBAction(
+  optimization: InsertOptimization
+): Promise<ActionState<SelectOptimization>> {
+  try {
+    // Remove potentially problematic fields that might not exist in the database
+    const safeOptimization = { ...optimization };
+    delete safeOptimization.bestValue;
+    delete safeOptimization.bestParameters;
+    
+    const [newOptimization] = await db.insert(optimizationsTable)
+      .values(safeOptimization)
+      .returning();
+    
+    return {
+      isSuccess: true,
+      message: "Optimization created successfully",
+      data: newOptimization
+    };
+  } catch (error) {
+    console.error("Error creating optimization:", error);
     return {
       isSuccess: false,
-      message: "You must be signed in to create an optimization"
+      message: "Failed to create optimization"
     };
   }
-
-  // Create a unique optimizer ID that includes the user ID to prevent collisions
-  const optimizerId = `${userId}_${optimizerName}_${Date.now()}`;
-  
-  return createOptimizationAction(optimizerId, config);
 }
 
-/**
- * Gets the next suggestion for experimentation
- */
-export async function getSuggestion(
-  optimizerId: string,
-  batchSize: number = 1
-): Promise<ActionState<{ status: string; suggestions: any[] }>> {
-  // Get the current user ID from Clerk
-  const { userId } = await auth();
-  
-  if (!userId) {
+// Get all optimizations for a user
+export async function getOptimizationsAction(
+  userId: string
+): Promise<ActionState<SelectOptimization[]>> {
+  try {
+    // Use a more explicit query that only selects columns we know exist
+    const optimizations = await db.select({
+      id: optimizationsTable.id,
+      userId: optimizationsTable.userId,
+      name: optimizationsTable.name,
+      description: optimizationsTable.description,
+      optimizerId: optimizationsTable.optimizerId,
+      config: optimizationsTable.config,
+      targetName: optimizationsTable.targetName,
+      targetMode: optimizationsTable.targetMode,
+      status: optimizationsTable.status,
+      lastModelUpdate: optimizationsTable.lastModelUpdate,
+      recommenderType: optimizationsTable.recommenderType,
+      acquisitionFunction: optimizationsTable.acquisitionFunction,
+      hasConstraints: optimizationsTable.hasConstraints,
+      isMultiObjective: optimizationsTable.isMultiObjective,
+      createdAt: optimizationsTable.createdAt,
+      updatedAt: optimizationsTable.updatedAt
+    })
+    .from(optimizationsTable)
+    .where(eq(optimizationsTable.userId, userId))
+    .orderBy(desc(optimizationsTable.createdAt));
+    
+    return {
+      isSuccess: true,
+      message: "Optimizations retrieved successfully",
+      data: optimizations
+    };
+  } catch (error) {
+    console.error("Error getting optimizations:", error);
     return {
       isSuccess: false,
-      message: "You must be signed in to get suggestions"
+      message: "Failed to get optimizations"
     };
   }
-  
-  return getSuggestionAction(optimizerId, batchSize);
 }
 
-/**
- * Adds a measurement to the optimization
- */
-export async function addMeasurement(
-  optimizerId: string,
-  parameters: Record<string, any>,
-  targetValue: number
-): Promise<ActionState<{ status: string; message: string }>> {
-  // Get the current user ID from Clerk
-  const { userId } = await auth();
-  
-  if (!userId) {
+// Get a single optimization by ID
+export async function getOptimizationByIdAction(
+  id: string
+): Promise<ActionState<SelectOptimization>> {
+  try {
+    const optimization = await db.select({
+      id: optimizationsTable.id,
+      userId: optimizationsTable.userId,
+      name: optimizationsTable.name,
+      description: optimizationsTable.description,
+      optimizerId: optimizationsTable.optimizerId,
+      config: optimizationsTable.config,
+      targetName: optimizationsTable.targetName,
+      targetMode: optimizationsTable.targetMode,
+      status: optimizationsTable.status,
+      lastModelUpdate: optimizationsTable.lastModelUpdate,
+      recommenderType: optimizationsTable.recommenderType,
+      acquisitionFunction: optimizationsTable.acquisitionFunction,
+      hasConstraints: optimizationsTable.hasConstraints,
+      isMultiObjective: optimizationsTable.isMultiObjective,
+      createdAt: optimizationsTable.createdAt,
+      updatedAt: optimizationsTable.updatedAt
+    })
+    .from(optimizationsTable)
+    .where(eq(optimizationsTable.id, id))
+    .then(rows => rows[0]);
+    
+    if (!optimization) {
+      return {
+        isSuccess: false,
+        message: "Optimization not found"
+      };
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Optimization retrieved successfully",
+      data: optimization
+    };
+  } catch (error) {
+    console.error("Error getting optimization:", error);
     return {
       isSuccess: false,
-      message: "You must be signed in to add measurements"
+      message: "Failed to get optimization"
     };
   }
-  
-  return addMeasurementAction(optimizerId, parameters, targetValue);
 }
 
-/**
- * Adds multiple measurements to the optimization
- */
-export async function addMultipleMeasurements(
-  optimizerId: string,
-  measurements: { parameters: Record<string, any>; target_value: number }[]
-): Promise<ActionState<{ status: string; message: string }>> {
-  // Get the current user ID from Clerk
-  const { userId } = await auth();
-  
-  if (!userId) {
-    return {
-      isSuccess: false,
-      message: "You must be signed in to add measurements"
-    };
-  }
-  
-  return addMultipleMeasurementsAction(optimizerId, measurements);
-}
-
-/**
- * Gets the current best point for the optimization
- */
-export async function getBestPoint(
+// Get an optimization by its optimizer ID
+export async function getOptimizationByOptimizerIdAction(
   optimizerId: string
-): Promise<
-  ActionState<{
-    status: string;
-    best_parameters?: Record<string, any>;
-    best_value?: number;
-    message?: string;
-  }>
-> {
-  // Get the current user ID from Clerk
-  const { userId } = await auth();
-  
-  if (!userId) {
+): Promise<ActionState<SelectOptimization>> {
+  try {
+    const optimization = await db.select({
+      id: optimizationsTable.id,
+      userId: optimizationsTable.userId,
+      name: optimizationsTable.name,
+      description: optimizationsTable.description,
+      optimizerId: optimizationsTable.optimizerId,
+      config: optimizationsTable.config,
+      targetName: optimizationsTable.targetName,
+      targetMode: optimizationsTable.targetMode,
+      status: optimizationsTable.status,
+      lastModelUpdate: optimizationsTable.lastModelUpdate,
+      recommenderType: optimizationsTable.recommenderType,
+      acquisitionFunction: optimizationsTable.acquisitionFunction,
+      hasConstraints: optimizationsTable.hasConstraints,
+      isMultiObjective: optimizationsTable.isMultiObjective,
+      createdAt: optimizationsTable.createdAt,
+      updatedAt: optimizationsTable.updatedAt
+    })
+    .from(optimizationsTable)
+    .where(eq(optimizationsTable.optimizerId, optimizerId))
+    .then(rows => rows[0]);
+    
+    if (!optimization) {
+      return {
+        isSuccess: false,
+        message: "Optimization not found"
+      };
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Optimization retrieved successfully",
+      data: optimization
+    };
+  } catch (error) {
+    console.error("Error getting optimization:", error);
     return {
       isSuccess: false,
-      message: "You must be signed in to get the best point"
+      message: "Failed to get optimization"
     };
   }
-  
-  return getBestPointAction(optimizerId);
 }
 
-/**
- * Loads an existing optimization
- */
-export async function loadOptimization(
-  optimizerId: string
-): Promise<ActionState<{ status: string; message: string }>> {
-  // Get the current user ID from Clerk
-  const { userId } = await auth();
-  
-  if (!userId) {
+// Update an optimization
+export async function updateOptimizationAction(
+  id: string,
+  data: Partial<InsertOptimization>
+): Promise<ActionState<SelectOptimization>> {
+  try {
+    // Remove potentially problematic fields that might not exist in the database
+    const safeData = { ...data };
+    delete safeData.bestValue;
+    delete safeData.bestParameters;
+    
+    const [updatedOptimization] = await db.update(optimizationsTable)
+      .set(safeData)
+      .where(eq(optimizationsTable.id, id))
+      .returning();
+
+    if (!updatedOptimization) {
+      return {
+        isSuccess: false,
+        message: "Optimization not found"
+      };
+    }
+    
+    return {
+      isSuccess: true,
+      message: "Optimization updated successfully",
+      data: updatedOptimization
+    };
+  } catch (error) {
+    console.error("Error updating optimization:", error);
     return {
       isSuccess: false,
-      message: "You must be signed in to load an optimization"
+      message: "Failed to update optimization"
     };
   }
-  
-  return loadOptimizationAction(optimizerId);
+}
+
+// Delete an optimization
+export async function deleteOptimizationAction(
+  id: string
+): Promise<ActionState<void>> {
+  try {
+    await db.delete(optimizationsTable)
+      .where(eq(optimizationsTable.id, id));
+    
+    return {
+      isSuccess: true,
+      message: "Optimization deleted successfully",
+      data: undefined
+    };
+  } catch (error) {
+    console.error("Error deleting optimization:", error);
+    return {
+      isSuccess: false,
+      message: "Failed to delete optimization"
+    };
+  }
+}
+
+// Create a new measurement
+export async function createMeasurementAction(
+  measurement: InsertMeasurement
+): Promise<ActionState<SelectMeasurement>> {
+  try {
+    const [newMeasurement] = await db.insert(measurementsTable)
+      .values(measurement)
+      .returning();
+    
+    return {
+      isSuccess: true,
+      message: "Measurement created successfully",
+      data: newMeasurement
+    };
+  } catch (error) {
+    console.error("Error creating measurement:", error);
+    return {
+      isSuccess: false,
+      message: "Failed to create measurement"
+    };
+  }
+}
+
+// Get all measurements for an optimization
+export async function getMeasurementsAction(
+  optimizationId: string
+): Promise<ActionState<SelectMeasurement[]>> {
+  try {
+    const measurements = await db.query.measurements.findMany({
+      where: eq(measurementsTable.optimizationId, optimizationId),
+      orderBy: [desc(measurementsTable.createdAt)]
+    });
+    
+    return {
+      isSuccess: true,
+      message: "Measurements retrieved successfully",
+      data: measurements
+    };
+  } catch (error) {
+    console.error("Error getting measurements:", error);
+    return {
+      isSuccess: false,
+      message: "Failed to get measurements"
+    };
+  }
+}
+
+// Create a new insight
+export async function createInsightAction(
+  insight: InsertInsight
+): Promise<ActionState<InsertInsight>> {
+  try {
+    const [newInsight] = await db.insert(insightsTable)
+      .values(insight)
+      .returning();
+    
+    return {
+      isSuccess: true,
+      message: "Insight created successfully",
+      data: newInsight
+    };
+  } catch (error) {
+    console.error("Error creating insight:", error);
+    return {
+      isSuccess: false,
+      message: "Failed to create insight"
+    };
+  }
+}
+
+// Get insights for an optimization
+export async function getInsightsAction(
+  optimizationId: string,
+  type?: string
+): Promise<ActionState<any[]>> {
+  try {
+    let query = db.select().from(insightsTable)
+      .where(eq(insightsTable.optimizationId, optimizationId));
+      
+    if (type) {
+      query = query.where(eq(insightsTable.type, type));
+    }
+    
+    const insights = await query;
+    
+    return {
+      isSuccess: true,
+      message: "Insights retrieved successfully",
+      data: insights
+    };
+  } catch (error) {
+    console.error("Error getting insights:", error);
+    return {
+      isSuccess: false,
+      message: "Failed to get insights"
+    };
+  }
 }

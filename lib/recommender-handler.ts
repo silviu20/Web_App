@@ -1,248 +1,125 @@
 // lib/recommender-handler.ts
-"use server"
-
-import {
-  RecommenderConfig,
-  AcquisitionFunctionConfig,
-  SearchSpaceConfig,
-  ObjectiveType
-} from "@/types/optimization-types"
-
 /**
- * Creates an optimal recommender configuration based on the search space,
- * objective, and available hardware
+ * Creates a recommender configuration
  */
 export function createRecommenderConfig(
-  searchSpace: SearchSpaceConfig,
-  objective: ObjectiveType,
+  searchSpace: Record<string, any>,
+  objective: Record<string, any>,
   options: {
     useGPU?: boolean
-    customConfig?: Partial<RecommenderConfig>
-    measurementCount?: number
+    customConfig?: Record<string, any>
   } = {}
-): RecommenderConfig {
-  const { useGPU = false, customConfig = {}, measurementCount = 0 } = options
+): Record<string, any> {
+  const { useGPU = false, customConfig } = options
 
-  // If a custom config is provided, merge it with defaults
-  if (Object.keys(customConfig).length > 0) {
+  // Default to TwoPhaseMetaRecommender if no custom config provided
+  if (!customConfig) {
+    // Default initial recommender (FPSRecommender)
+    const initialRecommender = {
+      type: "FPSRecommender"
+    }
+
+    // Default main recommender (BotorchRecommender)
+    const mainRecommender = {
+      type: "BotorchRecommender",
+      // GPU optimizations if available
+      ...(useGPU
+        ? {
+            n_restarts: 20,
+            n_raw_samples: 128
+          }
+        : {})
+    }
+
     return {
-      ...getDefaultRecommenderConfig(useGPU),
-      ...customConfig
+      type: "TwoPhaseMetaRecommender",
+      initial_recommender: initialRecommender,
+      recommender: mainRecommender,
+      switch_after: 1,
+      remain_switched: true
     }
   }
 
-  // For new optimizations with no data, use a TwoPhaseMetaRecommender
-  if (measurementCount === 0) {
-    return createTwoPhaseMetaRecommender(searchSpace, objective, useGPU)
+  // Use the provided custom configuration
+  return {
+    ...customConfig,
+    // Add GPU optimizations if we're using BotorchRecommender and GPU is available
+    ...(useGPU && customConfig.type === "BotorchRecommender"
+      ? {
+          n_restarts: customConfig.n_restarts || 20,
+          n_raw_samples: customConfig.n_raw_samples || 128
+        }
+      : {})
   }
-
-  // For hybrid search spaces (mix of discrete and continuous)
-  if (hasHybridSearchSpace(searchSpace)) {
-    return createHybridSpaceRecommender(searchSpace, objective, useGPU)
-  }
-
-  // For multi-objective optimization
-  if (objective.type === "ParetoObjective") {
-    return createParetoRecommender(searchSpace, objective, useGPU)
-  }
-
-  // Default to a standard BotorchRecommender
-  return createBotorchRecommender(searchSpace, objective, useGPU)
 }
 
 /**
- * Creates an appropriate acquisition function configuration based on
- * the objective and recommender
+ * Creates an acquisition function configuration
  */
 export function createAcquisitionFunctionConfig(
-  objective: ObjectiveType,
-  recommender: RecommenderConfig,
+  objective: Record<string, any>,
+  recommenderConfig: Record<string, any>,
   options: {
     useGPU?: boolean
-    customConfig?: Partial<AcquisitionFunctionConfig>
-    noisy?: boolean
+    customConfig?: Record<string, any>
   } = {}
-): AcquisitionFunctionConfig {
-  const { useGPU = false, customConfig = {}, noisy = true } = options
+): Record<string, any> {
+  const { useGPU = false, customConfig } = options
 
-  // If a custom config is provided, merge it with defaults
-  if (Object.keys(customConfig).length > 0) {
-    return {
-      ...getDefaultAcquisitionFunction(objective, noisy, useGPU),
-      ...customConfig
-    }
+  // If custom configuration is provided, use it
+  if (customConfig) {
+    return customConfig
   }
 
-  // For Pareto optimization
+  // Choose appropriate default based on objective type
   if (objective.type === "ParetoObjective") {
-    return createHypervolumeAcquisitionFunction(objective, useGPU)
-  }
-
-  // For noisy observations
-  if (noisy) {
-    return createNoisyAcquisitionFunction(objective, useGPU)
-  }
-
-  // Default acquisition function
-  return createDefaultAcquisitionFunction(objective, useGPU)
-}
-
-// Helper functions for creating specific recommender configurations
-
-function getDefaultRecommenderConfig(useGPU: boolean): RecommenderConfig {
-  return {
-    type: "TwoPhaseMetaRecommender",
-    initial_recommender: {
-      type: "FPSRecommender"
-    },
-    recommender: {
-      type: "BotorchRecommender",
-      n_restarts: useGPU ? 20 : 10,
-      n_raw_samples: useGPU ? 128 : 64
-    },
-    remain_switched: true,
-    switch_after_n_points: 0 // Switch as soon as any data is available
-  }
-}
-
-function createTwoPhaseMetaRecommender(
-  searchSpace: SearchSpaceConfig,
-  objective: ObjectiveType,
-  useGPU: boolean
-): RecommenderConfig {
-  // Default configuration
-  const config = getDefaultRecommenderConfig(useGPU)
-
-  // Adjust based on search space dimensionality
-  if (searchSpace.dimensionality > 10) {
-    // For high-dimensional spaces, use more samples
-    config.recommender.n_raw_samples = useGPU ? 256 : 128
-  }
-
-  return config
-}
-
-function createHybridSpaceRecommender(
-  searchSpace: SearchSpaceConfig,
-  objective: ObjectiveType,
-  useGPU: boolean
-): RecommenderConfig {
-  // For hybrid spaces, adjust the Botorch recommender
-  return {
-    type: "TwoPhaseMetaRecommender",
-    initial_recommender: {
-      type: "FPSRecommender"
-    },
-    recommender: {
-      type: "BotorchRecommender",
-      n_restarts: useGPU ? 20 : 10,
-      n_raw_samples: useGPU ? 128 : 64,
-      hybrid_space_handler: "auto" // Let BayBE determine the best approach
-    },
-    remain_switched: true,
-    switch_after_n_points: 0
-  }
-}
-
-function createParetoRecommender(
-  searchSpace: SearchSpaceConfig,
-  objective: ObjectiveType,
-  useGPU: boolean
-): RecommenderConfig {
-  // For Pareto optimization
-  return {
-    type: "TwoPhaseMetaRecommender",
-    initial_recommender: {
-      type: "FPSRecommender"
-    },
-    recommender: {
-      type: "BotorchRecommender",
-      n_restarts: useGPU ? 20 : 10,
-      n_raw_samples: useGPU ? 256 : 128,
-      surrogate: "MOGP", // Multi-output Gaussian Process
-      acquisition_function: "qLogNoisyExpectedHypervolumeImprovement"
-    },
-    remain_switched: true,
-    switch_after_n_points: 0
-  }
-}
-
-function createBotorchRecommender(
-  searchSpace: SearchSpaceConfig,
-  objective: ObjectiveType,
-  useGPU: boolean
-): RecommenderConfig {
-  // Standard Botorch recommender for single-objective optimization
-  return {
-    type: "BotorchRecommender",
-    n_restarts: useGPU ? 20 : 10,
-    n_raw_samples: useGPU ? 128 : 64,
-    acquisition_function: "qLogExpectedImprovement",
-    surrogate: "SingleTaskGP"
-  }
-}
-
-// Helper functions for creating acquisition function configurations
-
-function getDefaultAcquisitionFunction(
-  objective: ObjectiveType,
-  noisy: boolean,
-  useGPU: boolean
-): AcquisitionFunctionConfig {
-  if (noisy) {
     return {
-      type: "qLogNoisyExpectedImprovement",
-      num_fantasies: useGPU ? 64 : 32
-    }
-  } else {
-    return {
-      type: "qLogExpectedImprovement"
+      type: "qLogNoisyExpectedHypervolumeImprovement"
     }
   }
-}
 
-function createHypervolumeAcquisitionFunction(
-  objective: ObjectiveType,
-  useGPU: boolean
-): AcquisitionFunctionConfig {
-  return {
-    type: "qLogNoisyExpectedHypervolumeImprovement",
-    num_fantasies: useGPU ? 64 : 32,
-    alpha: 0.05
-  }
-}
-
-function createNoisyAcquisitionFunction(
-  objective: ObjectiveType,
-  useGPU: boolean
-): AcquisitionFunctionConfig {
-  return {
-    type: "qLogNoisyExpectedImprovement",
-    num_fantasies: useGPU ? 64 : 32,
-    prune_baseline: true
-  }
-}
-
-function createDefaultAcquisitionFunction(
-  objective: ObjectiveType,
-  useGPU: boolean
-): AcquisitionFunctionConfig {
+  // For single target or desirability objectives
   return {
     type: "qLogExpectedImprovement"
   }
 }
 
-// Utility functions
+/**
+ * Validates a recommender configuration
+ */
+export function validateRecommenderConfig(
+  config: Record<string, any>,
+  objectiveType: string
+): boolean {
+  // Check for required fields
+  if (!config.type) {
+    throw new Error("Recommender configuration must have a type")
+  }
 
-function hasHybridSearchSpace(searchSpace: SearchSpaceConfig): boolean {
-  // Check if the search space contains both continuous and discrete parameters
-  const hasDiscrete = searchSpace.parameters.some(
-    p => p.type === "NumericalDiscrete" || p.type === "CategoricalParameter"
-  )
+  // If it's a TwoPhaseMetaRecommender, validate sub-recommenders
+  if (config.type === "TwoPhaseMetaRecommender") {
+    if (!config.initial_recommender) {
+      throw new Error(
+        "TwoPhaseMetaRecommender must have an initial_recommender"
+      )
+    }
+    if (!config.recommender) {
+      throw new Error("TwoPhaseMetaRecommender must have a main recommender")
+    }
+  }
 
-  const hasContinuous = searchSpace.parameters.some(
-    p => p.type === "NumericalContinuous"
-  )
+  // Validate acquisition function compatibility with objective type if provided
+  if (config.acquisition_function) {
+    if (
+      objectiveType === "ParetoObjective" &&
+      config.acquisition_function.type !==
+        "qLogNoisyExpectedHypervolumeImprovement"
+    ) {
+      throw new Error(
+        `Acquisition function ${config.acquisition_function.type} is not compatible with Pareto objectives`
+      )
+    }
+  }
 
-  return hasDiscrete && hasContinuous
+  return true
 }

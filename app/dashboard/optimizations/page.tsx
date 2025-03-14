@@ -26,10 +26,19 @@ export default async function OptimizationsPage() {
     redirect("/login?redirect_url=/dashboard/optimizations")
   }
 
-  // Check if the API is available
-  const apiStatus = await checkAPIHealth()
-  const apiAvailable = apiStatus.isSuccess
-  const usingGPU = apiStatus.isSuccess && apiStatus.data.using_gpu
+  // Check if the API is available - with error handling
+  let apiAvailable = false
+  let usingGPU = false
+  let apiStatus = null
+
+  try {
+    apiStatus = await checkAPIHealth()
+    apiAvailable = apiStatus.isSuccess
+    usingGPU = apiStatus.isSuccess && apiStatus.data?.using_gpu
+  } catch (error) {
+    console.error("Error checking API health:", error)
+    // Continue with default values (API unavailable)
+  }
 
   // Get optimizations for this user
   const optimizationsResult = await getOptimizationsAction(userId)
@@ -72,13 +81,14 @@ export default async function OptimizationsPage() {
             </div>
           </div>
 
-          {apiAvailable && apiStatus.data.gpu_info && (
+          {apiAvailable && apiStatus?.data?.gpu_info && (
             <div className="bg-muted mt-4 rounded-md p-3">
               <p className="text-sm font-medium">GPU Information</p>
               <p className="text-muted-foreground text-xs">
                 {apiStatus.data.gpu_info.name} - Memory:{" "}
-                {apiStatus.data.gpu_info.memory_allocated_mb.toFixed(2)} MB
-                allocated
+                {apiStatus.data.gpu_info.memory_allocated_mb?.toFixed(2) ||
+                  "N/A"}{" "}
+                MB allocated
               </p>
             </div>
           )}

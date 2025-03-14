@@ -1,200 +1,100 @@
 // lib/objective-handler.ts
-"use server"
-
-import {
-  TargetConfig,
-  TargetMode,
-  ObjectiveType,
-  SingleTargetObjectiveConfig,
-  DesirabilityObjectiveConfig,
-  ParetoObjectiveConfig
-} from "@/types/optimization-types"
+import { Target, TargetMode } from "@/types/optimization-types"
 
 /**
- * Creates and validates target configuration
+ * Creates a target configuration
  */
 export function createTarget(
   name: string,
-  mode: TargetMode,
+  mode: TargetMode = "MAX",
   bounds?: [number, number]
-): TargetConfig {
-  // Validate target name
-  if (!name || typeof name !== "string") {
-    throw new Error("Target name must be a non-empty string")
+): Record<string, any> {
+  const targetConfig: Record<string, any> = {
+    name,
+    mode
   }
 
-  // Validate mode
-  if (!["MAX", "MIN", "MATCH"].includes(mode)) {
+  if (bounds) {
+    targetConfig.bounds = bounds
+  }
+
+  return targetConfig
+}
+
+/**
+ * Determines the objective configuration based on targets and options
+ */
+export function determineObjectiveConfig(
+  targets: Record<string, any>[],
+  options: {
+    type?: "single" | "desirability" | "pareto"
+    weights?: number[]
+  } = {}
+): Record<string, any> {
+  const { type = "single", weights = [] } = options
+
+  if (targets.length === 0) {
+    throw new Error("At least one target is required")
+  }
+
+  // Single target objective (simplest case)
+  if (type === "single" || (targets.length === 1 && type !== "pareto")) {
+    return {
+      type: "SingleTargetObjective",
+      target: targets[0]
+    }
+  }
+
+  // Multi-objective (desirability approach)
+  if (type === "desirability") {
+    // Ensure we have weights for all targets
+    const targetWeights =
+      weights.length === targets.length ? weights : targets.map(() => 1.0) // Default to equal weights
+
+    return {
+      type: "DesirabilityObjective",
+      targets,
+      weights: targetWeights,
+      mean_type: "arithmetic" // Default mean type
+    }
+  }
+
+  // Pareto optimization
+  if (type === "pareto") {
+    return {
+      type: "ParetoObjective",
+      targets
+    }
+  }
+
+  // Default to single target if no valid type specified
+  return {
+    type: "SingleTargetObjective",
+    target: targets[0]
+  }
+}
+
+/**
+ * Validates if a target configuration is valid
+ */
+export function validateTarget(target: Target): boolean {
+  // Check required fields
+  if (!target.name) {
+    throw new Error("Target must have a name")
+  }
+
+  // Check mode is valid
+  if (target.mode && !["MAX", "MIN", "MATCH"].includes(target.mode)) {
     throw new Error("Target mode must be one of: MAX, MIN, MATCH")
   }
 
-  // Validate bounds if provided
-  if (bounds !== undefined) {
-    if (
-      !Array.isArray(bounds) ||
-      bounds.length !== 2 ||
-      typeof bounds[0] !== "number" ||
-      typeof bounds[1] !== "number"
-    ) {
-      throw new Error("Target bounds must be a tuple of two numbers [min, max]")
-    }
-
-    if (bounds[0] >= bounds[1]) {
-      throw new Error("Target bounds must have min < max")
-    }
-  }
-
-  return { name, mode, bounds }
-}
-
-/**
- * Creates a single target objective
- */
-export function createSingleTargetObjective(
-  target: TargetConfig
-): SingleTargetObjectiveConfig {
-  return {
-    type: "SingleTargetObjective",
-    target
-  }
-}
-
-/**
- * Creates a desirability objective with multiple targets
- */
-export function createDesirabilityObjective(
-  targets: TargetConfig[],
-  weights?: number[],
-  aggregation: "arithmetic" | "geometric" = "arithmetic"
-): DesirabilityObjectiveConfig {
-  // Validate targets
-  if (!targets || !Array.isArray(targets) || targets.length < 2) {
-    throw new Error("Desirability objective requires at least two targets")
-  }
-
-  // Validate weights if provided
-  if (weights !== undefined) {
-    if (!Array.isArray(weights) || weights.length !== targets.length) {
-      throw new Error("Weights array must match the number of targets")
-    }
-
-    if (!weights.every(w => typeof w === "number" && w >= 0)) {
-      throw new Error("Weights must be non-negative numbers")
-    }
-  }
-
-  return {
-    type: "DesirabilityObjective",
-    targets,
-    weights: weights || targets.map(() => 1), // Default to equal weights
-    aggregation
-  }
-}
-
-/**
- * Creates a Pareto objective for multi-objective optimization
- */
-export function createParetoObjective(
-  targets: TargetConfig[],
-  referencePoint?: number[]
-): ParetoObjectiveConfig {
-  // Validate targets
-  if (!targets || !Array.isArray(targets) || targets.length < 2) {
-    throw new Error("Pareto objective requires at least two targets")
-  }
-
-  // Validate reference point if provided
-  if (referencePoint !== undefined) {
-    if (
-      !Array.isArray(referencePoint) ||
-      referencePoint.length !== targets.length
-    ) {
-      throw new Error("Reference point array must match the number of targets")
-    }
-
-    if (!referencePoint.every(p => typeof p === "number")) {
-      throw new Error("Reference point values must be numbers")
-    }
-  }
-
-  return {
-    type: "ParetoObjective",
-    targets,
-    referencePoint
-  }
-}
-
-/**
- * Determines the appropriate objective type based on targets and configuration
- */
-export function determineObjectiveConfig(
-  targets: TargetConfig[],
-  objectiveOptions?: {
-    type?: "single" | "desirability" | "pareto"
-    weights?: number[]
-    aggregation?: "arithmetic" | "geometric"
-    referencePoint?: number[]
-  }
-): ObjectiveType {
-  // Default to single target if only one target is provided
+  // Check bounds if provided
   if (
-    targets.length === 1 ||
-    !objectiveOptions?.type ||
-    objectiveOptions.type === "single"
+    target.bounds &&
+    (target.bounds.length !== 2 || target.bounds[0] >= target.bounds[1])
   ) {
-    return createSingleTargetObjective(targets[0])
+    throw new Error("Target bounds must be [min, max] with min < max")
   }
 
-  // Create the appropriate multi-objective configuration
-  switch (objectiveOptions.type) {
-    case "desirability":
-      return createDesirabilityObjective(
-        targets,
-        objectiveOptions.weights,
-        objectiveOptions.aggregation
-      )
-
-    case "pareto":
-      return createParetoObjective(targets, objectiveOptions.referencePoint)
-
-    default:
-      throw new Error(`Unsupported objective type: ${objectiveOptions.type}`)
-  }
-}
-
-/**
- * Creates a binary target for yes/no outcomes
- */
-export function createBinaryTarget(
-  name: string,
-  mode: "MAX" | "MIN" // For binary targets, we only support MAX/MIN
-): TargetConfig {
-  return {
-    name,
-    mode,
-    isBinary: true,
-    bounds: [0, 1] // Binary targets are always bounded between 0 and 1
-  }
-}
-
-/**
- * Calculates default hypervolume reference point for Pareto objectives
- */
-export function calculateDefaultReferencePoint(
-  targets: TargetConfig[],
-  measurements: { targetValues: number[] }[]
-): number[] {
-  // Implementation of a sensible reference point calculation
-  // based on the observed data and optimization modes
-  return targets.map((target, index) => {
-    const values = measurements.map(m => m.targetValues[index])
-
-    // For maximization, use the minimum observed value
-    // For minimization, use the maximum observed value
-    if (target.mode === "MAX") {
-      return Math.min(...values) - 0.1 * Math.abs(Math.min(...values))
-    } else {
-      return Math.max(...values) + 0.1 * Math.abs(Math.max(...values))
-    }
-  })
+  return true
 }

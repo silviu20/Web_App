@@ -4,24 +4,23 @@ import postgres from "postgres"
 import {
   profilesTable,
   optimizationsTable,
-  measurementsTable
+  measurementsTable,
+  insightsTable
 } from "@/db/schema"
 
-// Check for required environment variable
-if (!process.env.DATABASE_URL) {
+// Initialize Postgres client
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is not set")
 }
 
-// Create database connection
-const connectionString = process.env.DATABASE_URL
 const client = postgres(connectionString, { max: 1 })
-
-// Define schema for tables
 const schema = {
   profiles: profilesTable,
   optimizations: optimizationsTable,
-  measurements: measurementsTable
+  measurements: measurementsTable,
+  insights: insightsTable
 }
 
-// Create drizzle instance with schema
+// Initialize Drizzle ORM
 export const db = drizzle(client, { schema })
