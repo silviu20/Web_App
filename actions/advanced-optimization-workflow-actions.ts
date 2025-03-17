@@ -45,7 +45,8 @@ import {
   InsertOptimization,
   SelectOptimization,
   SelectMeasurement,
-  InsertInsight
+  InsertInsight,
+  Target
 } from "@/db/schema/optimizations-schema";
 
 /**
@@ -161,9 +162,23 @@ export async function createAdvancedOptimizationWorkflowAction(
       description,
       optimizerId,
       config: apiConfig,
+      
+      // Store all targets as a JSON array
+      targets: config.targets as Target[],
+      
+      // Store the first target as the primary target for display and backwards compatibility
+      primaryTargetName: mainTarget.name,
+      primaryTargetMode: mainTarget.mode,
+      
+      // For backward compatibility
       targetName: mainTarget.name,
       targetMode: mainTarget.mode,
+      
+      // Store the objective type
+      objectiveType: config.objectiveType || "single",
+      
       status: "active",
+      
       // Additional fields
       recommenderType: recommenderConfig.type,
       acquisitionFunction: acquisitionConfig.type,
@@ -268,7 +283,239 @@ export async function getAdvancedSuggestionWorkflowAction(
 }
 
 /**
- * Adds multiple measurements at once
+ * Adds a measurement with multiple target values to the optimization
+ */
+export async function addMultiTargetMeasurementWorkflowAction(
+  optimizationId: string,
+  parameters: Record<string, any>,
+  targetValues: Record<string, number>,
+  isRecommended: boolean = true
+): Promise<ActionState<SelectMeasurement>> {
+  const { userId } = await auth();
+  
+  if (!userId) {
+    return {
+      isSuccess: false,
+      message: "You must be signed in to add measurements"
+    };
+  }
+  
+  try {
+    // Get the optimization from our database
+    const optResult = await getOptimizationByOptimizerIdAction(optimizationId);
+    
+    if (!optResult.isSuccess || !optResult.data) {
+      return {
+        isSuccess: false,
+        message: `Database Error: ${optResult.message}`
+      };
+    }
+    
+    // Verify ownership
+    if (optResult.data.userId !== userId) {
+      return {
+        isSuccess: false,
+        message: "You don't have permission to access this optimization"
+      };
+    }
+    
+    const optimization = optResult.data;
+    
+    // Prepare API submission
+    // For the API, we need to determine what to send based on the objective type
+    let apiTargetValue: number | Record<string, number>;
+    
+    if (optimization.isMultiObjective) {
+      // For multi-objective optimizations, send all target values
+      apiTargetValue = targetValues;
+    } else {
+      // For single-objective optimizations, send just the primary target value
+      const targetName = optimization.primaryTargetName || optimization.targetName;
+      apiTargetValue = targetValues[targetName];
+      
+      if (apiTargetValue === undefined) {
+        return {
+          isSuccess: false,
+          message: `Missing value for primary target: ${targetName}`
+        };
+      }
+    }
+    
+    // Add measurement to the API
+    const apiResult = await addMeasurementAction(
+      optimizationId,
+      parameters,
+      apiTargetValue
+    );
+    
+    if (!apiResult.isSuccess) {
+      return {
+        isSuccess: false,
+        message: `API Error: ${apiResult.message}`
+      };
+    }
+    
+    // Convert target values to strings for database storage
+    const targetValuesAsStrings: Record<string, string> = {};
+    Object.entries(targetValues).forEach(([key, value]) => {
+      targetValuesAsStrings[key] = value.toString();
+    });
+    
+    // Add measurement to our database
+    const targetName = optimization.primaryTargetName || optimization.targetName;
+    const measurement = {
+      optimizationId: optimization.id,
+      parameters,
+      targetValues: targetValuesAsStrings,
+      // Use the primary target value for backward compatibility
+      targetValue: targetValues[targetName].toString(),
+      isRecommended
+    };
+    
+    const dbResult = await createMeasurementAction(measurement);
+    
+    if (!dbResult.isSuccess) {
+      return {
+        isSuccess: false,
+        message: `Database Error: ${dbResult.message}`
+      };
+    }
+    
+    // Update the optimization status
+    await updateOptimizationAction(optimization.id, {
+      status: "active",
+      lastModelUpdate: new Date()
+    });
+    
+    return {
+      isSuccess: true,
+      message: "Measurement added successfully",
+      data: dbResult.data
+    };
+    
+  } catch (error) {
+    console.error("Error in workflow:", error);
+    return {
+      isSuccess: false,
+      message: "Failed to add measurement"
+    };
+  }
+}
+
+/**
+ * Adds multiple measurements at once with multiple target values
+ */
+export async function addMultipleMeasurementsMultiTargetWorkflowAction(
+  optimizationId: string,
+  measurements: { 
+    parameters: Record<string, any>; 
+    targetValues: Record<string, number>; 
+    isRecommended?: boolean 
+  }[]
+): Promise<ActionState<{ message: string }>> {
+  const { userId } = await auth();
+  
+  if (!userId) {
+    return {
+      isSuccess: false,
+      message: "You must be signed in to add measurements"
+    };
+  }
+  
+  try {
+    // Get the optimization from our database
+    const optResult = await getOptimizationByOptimizerIdAction(optimizationId);
+    
+    if (!optResult.isSuccess || !optResult.data) {
+      return {
+        isSuccess: false,
+        message: `Database Error: ${optResult.message}`
+      };
+    }
+    
+    // Verify ownership
+    if (optResult.data.userId !== userId) {
+      return {
+        isSuccess: false,
+        message: "You don't have permission to access this optimization"
+      };
+    }
+    
+    const optimization = optResult.data;
+    
+    // Format for the API - depends on if multi-objective or not
+    const apiMeasurements = measurements.map(m => {
+      if (optimization.isMultiObjective) {
+        // For multi-objective, send all target values
+        return {
+          parameters: m.parameters,
+          target_values: m.targetValues
+        };
+      } else {
+        // For single-objective, send just the primary target
+        const targetName = optimization.primaryTargetName || optimization.targetName;
+        return {
+          parameters: m.parameters,
+          target_value: m.targetValues[targetName]
+        };
+      }
+    });
+    
+    // Add measurements to the API
+    const apiResult = await addMultipleMeasurementsAction(
+      optimizationId,
+      apiMeasurements
+    );
+    
+    if (!apiResult.isSuccess) {
+      return {
+        isSuccess: false,
+        message: `API Error: ${apiResult.message}`
+      };
+    }
+    
+    // Add measurements to our database
+    for (const measurement of measurements) {
+      // Convert target values to strings for storage
+      const targetValuesAsStrings: Record<string, string> = {};
+      Object.entries(measurement.targetValues).forEach(([key, value]) => {
+        targetValuesAsStrings[key] = value.toString();
+      });
+      
+      const targetName = optimization.primaryTargetName || optimization.targetName;
+      await createMeasurementAction({
+        optimizationId: optimization.id,
+        parameters: measurement.parameters,
+        targetValues: targetValuesAsStrings,
+        // Use primary target for backward compatibility
+        targetValue: measurement.targetValues[targetName].toString(),
+        isRecommended: measurement.isRecommended ?? false
+      });
+    }
+    
+    // Update the optimization status
+    await updateOptimizationAction(optimization.id, {
+      status: "active",
+      lastModelUpdate: new Date()
+    });
+    
+    return {
+      isSuccess: true,
+      message: "Measurements added successfully",
+      data: { message: "Measurements added successfully" }
+    };
+    
+  } catch (error) {
+    console.error("Error in workflow:", error);
+    return {
+      isSuccess: false,
+      message: "Failed to add measurements"
+    };
+  }
+}
+
+/**
+ * Adds multiple measurements at once (legacy single-target version)
  */
 export async function addMultipleMeasurementsWorkflowAction(
   optimizationId: string,
@@ -540,7 +787,7 @@ export async function exportOptimizationWorkflowAction(
   }
 }
 
-// Helper to check if GPU is available
+// Helper function
 async function checkGPUAvailability(): Promise<{ isAvailable: boolean }> {
   try {
     const healthCheck = await checkAPIHealthAction();

@@ -1,100 +1,81 @@
 // lib/objective-handler.ts
-import { Target, TargetMode } from "@/types/optimization-types"
 
 /**
- * Creates a target configuration
+ * Creates a target object for the Bayesian Optimization API
  */
 export function createTarget(
   name: string,
-  mode: TargetMode = "MAX",
+  mode: "MAX" | "MIN" | "MATCH",
   bounds?: [number, number]
-): Record<string, any> {
-  const targetConfig: Record<string, any> = {
+) {
+  const target = {
     name,
     mode
   }
 
-  if (bounds) {
-    targetConfig.bounds = bounds
+  // Add bounds for MATCH mode
+  if (mode === "MATCH" && bounds) {
+    return {
+      ...target,
+      bounds
+    }
   }
 
-  return targetConfig
+  return target
+}
+
+/**
+ * Options for determining the objective configuration
+ */
+interface ObjectiveOptions {
+  type?: "single" | "desirability" | "pareto"
+  weights?: number[]
 }
 
 /**
  * Determines the objective configuration based on targets and options
  */
 export function determineObjectiveConfig(
-  targets: Record<string, any>[],
-  options: {
-    type?: "single" | "desirability" | "pareto"
-    weights?: number[]
-  } = {}
-): Record<string, any> {
-  const { type = "single", weights = [] } = options
+  targets: any[],
+  options: ObjectiveOptions = {}
+) {
+  // Use the provided type or determine based on number of targets
+  const objectiveType =
+    options.type || (targets.length > 1 ? "desirability" : "single")
 
-  if (targets.length === 0) {
-    throw new Error("At least one target is required")
-  }
+  // Create the appropriate objective config
+  switch (objectiveType) {
+    case "single":
+      return {
+        type: "SingleTargetObjective",
+        target: targets[0]
+      }
 
-  // Single target objective (simplest case)
-  if (type === "single" || (targets.length === 1 && type !== "pareto")) {
-    return {
-      type: "SingleTargetObjective",
-      target: targets[0]
-    }
-  }
+    case "desirability":
+      return {
+        type: "DesirabilityObjective",
+        targets,
+        weights: options.weights || targets.map(() => 1)
+      }
 
-  // Multi-objective (desirability approach)
-  if (type === "desirability") {
-    // Ensure we have weights for all targets
-    const targetWeights =
-      weights.length === targets.length ? weights : targets.map(() => 1.0) // Default to equal weights
+    case "pareto":
+      return {
+        type: "ParetoObjective",
+        targets
+      }
 
-    return {
-      type: "DesirabilityObjective",
-      targets,
-      weights: targetWeights,
-      mean_type: "arithmetic" // Default mean type
-    }
-  }
-
-  // Pareto optimization
-  if (type === "pareto") {
-    return {
-      type: "ParetoObjective",
-      targets
-    }
-  }
-
-  // Default to single target if no valid type specified
-  return {
-    type: "SingleTargetObjective",
-    target: targets[0]
+    default:
+      throw new Error(`Unsupported objective type: ${objectiveType}`)
   }
 }
 
 /**
- * Validates if a target configuration is valid
+ * Convert a target mode string to the appropriate enum value
  */
-export function validateTarget(target: Target): boolean {
-  // Check required fields
-  if (!target.name) {
-    throw new Error("Target must have a name")
+export function normalizeTargetMode(mode: string): "MAX" | "MIN" | "MATCH" {
+  const normalized = mode.toUpperCase()
+  if (normalized === "MAX" || normalized === "MIN" || normalized === "MATCH") {
+    return normalized as "MAX" | "MIN" | "MATCH"
   }
-
-  // Check mode is valid
-  if (target.mode && !["MAX", "MIN", "MATCH"].includes(target.mode)) {
-    throw new Error("Target mode must be one of: MAX, MIN, MATCH")
-  }
-
-  // Check bounds if provided
-  if (
-    target.bounds &&
-    (target.bounds.length !== 2 || target.bounds[0] >= target.bounds[1])
-  ) {
-    throw new Error("Target bounds must be [min, max] with min < max")
-  }
-
-  return true
+  throw new Error(`Invalid target mode: ${mode}. Must be MAX, MIN, or MATCH.`)
 }

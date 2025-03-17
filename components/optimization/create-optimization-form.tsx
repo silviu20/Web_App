@@ -3,17 +3,6 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useForm, useFieldArray } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -27,184 +16,129 @@ import {
   FormMessage
 } from "@/components/ui/form"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select"
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter
+} from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from "@/components/ui/accordion"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table"
-import {
-  ArrowUpDown,
-  CheckCircle,
-  ChevronDown,
-  FileCog,
-  Info,
-  Loader2,
-  Plus,
-  Target,
-  Trash,
-  X,
-  ArrowDown,
-  ArrowUp,
-  Settings
-} from "lucide-react"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from "@/components/ui/tooltip"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm } from "react-hook-form"
+import * as z from "zod"
+import { Steps } from "@/components/ui/steps"
 import { toast } from "@/components/ui/use-toast"
+import { ParameterForm } from "@/components/optimization/parameter-form"
+import { MultiTargetForm } from "@/components/optimization/multi-target-form"
+import { ConstraintForm } from "@/components/optimization/constraint-form"
 import { createAdvancedOptimizationWorkflowAction } from "@/actions/advanced-optimization-workflow-actions"
-import { ConstraintForm } from "./constraint-form"
+import { Loader2, CheckCircle, ArrowRight } from "lucide-react"
 
-// Validation schema for the form
-const formSchema = z.object({
-  name: z.string().min(3, "Name must be at least 3 characters"),
-  description: z.string().optional(),
-  parameters: z
-    .array(
-      z.object({
-        name: z.string().min(1, "Parameter name is required"),
-        type: z.string().min(1, "Parameter type is required"),
-        values: z.array(z.union([z.string(), z.number()])).optional(),
-        bounds: z.tuple([z.number(), z.number()]).optional(),
-        encoding: z.string().optional(),
-        tolerance: z.number().optional(),
-        description: z.string().optional()
-      })
-    )
-    .min(1, "At least one parameter is required"),
-  targets: z
-    .array(
-      z.object({
-        name: z.string().min(1, "Target name is required"),
-        mode: z.enum(["MAX", "MIN", "MATCH"]),
-        bounds: z.tuple([z.number(), z.number()]).optional(),
-        weight: z.number().optional()
-      })
-    )
-    .min(1, "At least one target is required"),
-  objectiveType: z.enum(["single", "desirability", "pareto"]).default("single"),
-  recommenderType: z.string().optional(),
-  acquisitionFunction: z.string().optional(),
-  useAdvancedOptions: z.boolean().default(false)
+// Schema for the basic information form
+const basicInfoSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional()
 })
-
-// Type for the form values
-type FormValues = z.infer<typeof formSchema>
 
 export function CreateOptimizationForm() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState("basic")
+  const [currentStep, setCurrentStep] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Form data for each step
+  const [basicInfo, setBasicInfo] = useState<z.infer<
+    typeof basicInfoSchema
+  > | null>(null)
+  const [parameters, setParameters] = useState<any[]>([])
+  const [targetsData, setTargetsData] = useState<{
+    targets: any[]
+    objectiveType: "single" | "desirability" | "pareto"
+  } | null>(null)
   const [constraints, setConstraints] = useState<any[]>([])
 
-  // Initialize form with defaults
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+  // Basic info form
+  const basicInfoForm = useForm<z.infer<typeof basicInfoSchema>>({
+    resolver: zodResolver(basicInfoSchema),
     defaultValues: {
       name: "",
-      description: "",
-      parameters: [
-        {
-          name: "",
-          type: "NumericalContinuous",
-          bounds: [0, 100]
-        }
-      ],
-      targets: [
-        {
-          name: "Target",
-          mode: "MAX"
-        }
-      ],
-      objectiveType: "single",
-      useAdvancedOptions: false
+      description: ""
     }
   })
 
-  // Field arrays for parameters and targets
-  const {
-    fields: parameterFields,
-    append: appendParameter,
-    remove: removeParameter,
-    replace: replaceParameters
-  } = useFieldArray({
-    control: form.control,
-    name: "parameters"
-  })
+  // Handle completion of basic info step
+  const onBasicInfoSubmit = (data: z.infer<typeof basicInfoSchema>) => {
+    setBasicInfo(data)
+    setCurrentStep(1)
+  }
 
-  const {
-    fields: targetFields,
-    append: appendTarget,
-    remove: removeTarget
-  } = useFieldArray({
-    control: form.control,
-    name: "targets"
-  })
+  // Handle completion of parameters step
+  const onParametersSubmit = (params: any[]) => {
+    setParameters(params)
+    setCurrentStep(2)
+  }
 
-  // Handle form submission
-  const onSubmit = async (values: FormValues) => {
+  // Handle completion of targets step
+  const onTargetsSubmit = (data: {
+    targets: any[]
+    objectiveType: "single" | "desirability" | "pareto"
+  }) => {
+    setTargetsData(data)
+    setCurrentStep(3)
+  }
+
+  // Handle adding a constraint
+  const onAddConstraint = (constraint: any) => {
+    setConstraints([...constraints, constraint])
+  }
+
+  // Handle removing a constraint
+  const onRemoveConstraint = (index: number) => {
+    const updated = [...constraints]
+    updated.splice(index, 1)
+    setConstraints(updated)
+  }
+
+  // Handle form submission to create optimization
+  const handleCreateOptimization = async () => {
+    if (!basicInfo || !parameters.length || !targetsData) {
+      toast({
+        title: "Missing information",
+        description: "Please complete all required steps",
+        variant: "destructive"
+      })
+      return
+    }
+
     setIsSubmitting(true)
+
     try {
-      // Prepare the configuration
-      const config: any = {
-        parameters: values.parameters,
-        targets: values.targets,
+      // Create the configuration object for the API
+      const config = {
+        parameters,
+        targets: targetsData.targets,
+        objectiveType: targetsData.objectiveType,
         constraints: constraints.length > 0 ? constraints : undefined
       }
 
-      // Add advanced configuration if enabled
-      if (values.useAdvancedOptions) {
-        if (values.objectiveType) {
-          config.objectiveType = values.objectiveType
-        }
-
-        if (values.recommenderType) {
-          config.recommenderType = values.recommenderType
-        }
-
-        if (values.acquisitionFunction) {
-          config.acquisitionFunction = values.acquisitionFunction
-        }
-      }
-
-      // Create optimization
+      // Call the API to create the optimization
       const result = await createAdvancedOptimizationWorkflowAction(
-        values.name,
-        values.description || "",
+        basicInfo.name,
+        basicInfo.description || "",
         config
       )
 
-      if (result.isSuccess && result.data) {
+      if (result.isSuccess) {
         toast({
-          title: "Optimization Created",
+          title: "Optimization created",
           description: "Your optimization has been created successfully"
         })
 
-        // Redirect to the new optimization
+        // Navigate to the optimization page
         router.push(`/dashboard/optimizations/${result.data.id}`)
       } else {
         toast({
-          title: "Error",
+          title: "Error creating optimization",
           description: result.message,
           variant: "destructive"
         })
@@ -213,8 +147,7 @@ export function CreateOptimizationForm() {
       console.error("Error creating optimization:", error)
       toast({
         title: "Error",
-        description:
-          error instanceof Error ? error.message : "Unknown error occurred",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive"
       })
     } finally {
@@ -222,114 +155,59 @@ export function CreateOptimizationForm() {
     }
   }
 
-  // Parameter type options
-  const parameterTypes = [
-    { value: "NumericalContinuous", label: "Numerical (Continuous)" },
-    { value: "NumericalDiscrete", label: "Numerical (Discrete)" },
-    { value: "CategoricalParameter", label: "Categorical" }
-  ]
-
-  // Recommender type options
-  const recommenderTypes = [
-    { value: "BotorchRecommender", label: "Botorch (Default)" },
-    { value: "RandomRecommender", label: "Random Search" },
-    { value: "FPSRecommender", label: "Farthest Point Sampling" },
-    { value: "TwoPhaseMetaRecommender", label: "Two-Phase Meta Recommender" }
-  ]
-
-  // Acquisition function options
-  const acquisitionFunctions = [
+  // Steps for the creation process
+  const steps = [
     {
-      value: "qLogExpectedImprovement",
-      label: "Log Expected Improvement (Default)"
+      title: "Basic Information",
+      description: "Name and describe your optimization"
     },
-    { value: "qExpectedImprovement", label: "Expected Improvement" },
-    { value: "qProbabilityOfImprovement", label: "Probability of Improvement" },
-    { value: "qUpperConfidenceBound", label: "Upper Confidence Bound" }
-  ]
-
-  // Handle parameter type change
-  const handleParameterTypeChange = (type: string, index: number) => {
-    const currentParams = form.getValues("parameters")
-    const param = currentParams[index]
-
-    // Update defaults based on parameter type
-    if (type === "NumericalContinuous") {
-      param.bounds = param.bounds || [0, 100]
-      delete param.values
-    } else if (type === "NumericalDiscrete") {
-      param.values = param.values || [0, 1, 2, 3, 4, 5]
-      delete param.bounds
-    } else if (type === "CategoricalParameter") {
-      param.values = param.values || ["A", "B", "C"]
-      delete param.bounds
+    {
+      title: "Parameters",
+      description: "Define the input parameters"
+    },
+    {
+      title: "Targets",
+      description: "Specify what to optimize"
+    },
+    {
+      title: "Constraints",
+      description: "Add optional constraints"
     }
-
-    // Update the parameter
-    param.type = type
-    replaceParameters(currentParams)
-  }
-
-  // Add a constraint
-  const addConstraint = (constraint: any) => {
-    setConstraints([...constraints, constraint])
-    toast({
-      title: "Constraint Added",
-      description: `${constraint.type} constraint added successfully`
-    })
-  }
-
-  // Remove a constraint
-  const removeConstraint = (index: number) => {
-    const updatedConstraints = [...constraints]
-    updatedConstraints.splice(index, 1)
-    setConstraints(updatedConstraints)
-    toast({
-      title: "Constraint Removed",
-      description: "Constraint removed successfully"
-    })
-  }
+  ]
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <FileCog className="mr-2 size-5" />
-            Create New Optimization
-          </CardTitle>
-          <CardDescription>
-            Configure your optimization by specifying parameters, targets, and
-            settings.
-          </CardDescription>
-        </CardHeader>
+    <div className="space-y-8">
+      {/* Progress Steps */}
+      <Steps currentStep={currentStep} steps={steps} />
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <CardContent>
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="basic">Basic Info</TabsTrigger>
-                  <TabsTrigger value="parameters">Parameters</TabsTrigger>
-                  <TabsTrigger value="advanced">Advanced</TabsTrigger>
-                </TabsList>
-              </CardContent>
-
-              {/* Basic Info Tab */}
-              <TabsContent value="basic" className="space-y-6">
-                <CardContent className="space-y-6">
-                  {/* Name and Description */}
+      {/* Step Content */}
+      <div className="space-y-6">
+        {/* Step 1: Basic Information */}
+        {currentStep === 0 && (
+          <Form {...basicInfoForm}>
+            <form onSubmit={basicInfoForm.handleSubmit(onBasicInfoSubmit)}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Basic Information</CardTitle>
+                  <CardDescription>
+                    Provide a name and description for your optimization
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <FormField
-                    control={form.control}
+                    control={basicInfoForm.control}
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Optimization Name</FormLabel>
+                        <FormLabel>Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter a name..." {...field} />
+                          <Input
+                            placeholder="e.g., Catalyst Optimization"
+                            {...field}
+                          />
                         </FormControl>
                         <FormDescription>
-                          A descriptive name for your optimization project
+                          A descriptive name for your optimization
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -337,578 +215,181 @@ export function CreateOptimizationForm() {
                   />
 
                   <FormField
-                    control={form.control}
+                    control={basicInfoForm.control}
                     name="description"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Description (Optional)</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Enter a description..."
-                            className="min-h-[100px]"
+                            placeholder="Describe the purpose and goals of this optimization"
                             {...field}
                           />
                         </FormControl>
                         <FormDescription>
-                          A brief description of what you're optimizing
+                          Provide context about what you're trying to optimize
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <Button type="button" variant="outline" disabled>
+                    Back
+                  </Button>
+                  <Button type="submit">
+                    Next
+                    <ArrowRight className="ml-2 size-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            </form>
+          </Form>
+        )}
 
-                  {/* Target Configuration */}
-                  <div>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="text-lg font-medium">Target(s)</h3>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => appendTarget({ name: "", mode: "MAX" })}
-                      >
-                        <Plus className="mr-1 size-4" />
-                        Add Target
-                      </Button>
-                    </div>
+        {/* Step 2: Parameters */}
+        {currentStep === 1 && (
+          <div>
+            <ParameterForm
+              parameters={parameters}
+              onSubmit={onParametersSubmit}
+            />
+            <div className="mt-4 flex justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCurrentStep(0)}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                onClick={() => onParametersSubmit(parameters)}
+                disabled={parameters.length === 0}
+              >
+                Next
+                <ArrowRight className="ml-2 size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
-                    {targetFields.map((field, index) => (
+        {/* Step 3: Targets */}
+        {currentStep === 2 && (
+          <div>
+            <MultiTargetForm
+              onSubmit={onTargetsSubmit}
+              defaultValues={targetsData || undefined}
+            />
+            <div className="mt-4 flex justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCurrentStep(1)}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (targetsData && targetsData.targets.length > 0) {
+                    setCurrentStep(3)
+                  } else {
+                    toast({
+                      title: "Missing targets",
+                      description: "Please define at least one target",
+                      variant: "destructive"
+                    })
+                  }
+                }}
+                disabled={!targetsData || targetsData.targets.length === 0}
+              >
+                Next
+                <ArrowRight className="ml-2 size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Constraints */}
+        {currentStep === 3 && (
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Constraints (Optional)</CardTitle>
+                <CardDescription>
+                  Add constraints to ensure valid parameter combinations
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Display current constraints */}
+                {constraints.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="font-medium">Current Constraints</h3>
+                    {constraints.map((constraint, index) => (
                       <div
-                        key={field.id}
-                        className="mb-6 rounded-md border p-4"
+                        key={index}
+                        className="flex items-center justify-between rounded-md border p-3"
                       >
-                        <div className="mb-4 flex items-center justify-between">
-                          <h4 className="font-medium">
-                            Target #{index + 1}
-                            {index === 0 && (
-                              <Badge variant="outline" className="ml-2">
-                                Primary
-                              </Badge>
-                            )}
-                          </h4>
-                          {targetFields.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeTarget(index)}
-                            >
-                              <Trash className="size-4 text-red-500" />
-                            </Button>
-                          )}
+                        <div>
+                          <p className="font-medium">{constraint.type}</p>
+                          <p className="text-muted-foreground text-sm">
+                            {constraint.parameters?.join(", ") ||
+                              "No parameters defined"}
+                          </p>
                         </div>
-
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <FormField
-                            control={form.control}
-                            name={`targets.${index}.name`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Target Name</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    placeholder="e.g., Yield, Efficiency..."
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name={`targets.${index}.mode`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Optimization Mode</FormLabel>
-                                <Select
-                                  onValueChange={field.onChange}
-                                  defaultValue={field.value}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select mode" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="MAX">
-                                      <div className="flex items-center">
-                                        <ArrowUp className="mr-2 size-4 text-green-500" />
-                                        Maximize
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="MIN">
-                                      <div className="flex items-center">
-                                        <ArrowDown className="mr-2 size-4 text-red-500" />
-                                        Minimize
-                                      </div>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormDescription>
-                                  Whether to maximize or minimize this target
-                                </FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRemoveConstraint(index)}
+                        >
+                          <Loader2 className="size-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
-
-                  <div className="text-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setActiveTab("parameters")}
-                    >
-                      Next: Configure Parameters
-                    </Button>
-                  </div>
-                </CardContent>
-              </TabsContent>
-
-              {/* Parameters Tab */}
-              <TabsContent value="parameters" className="space-y-6">
-                <CardContent className="space-y-6">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-medium">Parameters</h3>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        appendParameter({
-                          name: "",
-                          type: "NumericalContinuous",
-                          bounds: [0, 100]
-                        })
-                      }
-                    >
-                      <Plus className="mr-1 size-4" />
-                      Add Parameter
-                    </Button>
-                  </div>
-
-                  {parameterFields.map((field, index) => (
-                    <div key={field.id} className="rounded-md border p-4">
-                      <div className="mb-4 flex items-center justify-between">
-                        <h4 className="font-medium">Parameter #{index + 1}</h4>
-                        {parameterFields.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeParameter(index)}
-                          >
-                            <Trash className="size-4 text-red-500" />
-                          </Button>
-                        )}
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FormField
-                          control={form.control}
-                          name={`parameters.${index}.name`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Parameter Name</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder="e.g., Temperature, Pressure..."
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`parameters.${index}.type`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Parameter Type</FormLabel>
-                              <Select
-                                onValueChange={value => {
-                                  field.onChange(value)
-                                  handleParameterTypeChange(value, index)
-                                }}
-                                defaultValue={field.value}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select type" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {parameterTypes.map(type => (
-                                    <SelectItem
-                                      key={type.value}
-                                      value={type.value}
-                                    >
-                                      {type.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      {/* Render bounds for continuous parameters */}
-                      {form.watch(`parameters.${index}.type`) ===
-                        "NumericalContinuous" && (
-                        <div className="mt-4 grid gap-4 md:grid-cols-2">
-                          <FormField
-                            control={form.control}
-                            name={`parameters.${index}.bounds.0`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Lower Bound</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    step="any"
-                                    {...field}
-                                    onChange={e =>
-                                      field.onChange(parseFloat(e.target.value))
-                                    }
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name={`parameters.${index}.bounds.1`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Upper Bound</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    step="any"
-                                    {...field}
-                                    onChange={e =>
-                                      field.onChange(parseFloat(e.target.value))
-                                    }
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      )}
-
-                      {/* Render values for discrete parameters */}
-                      {(form.watch(`parameters.${index}.type`) ===
-                        "NumericalDiscrete" ||
-                        form.watch(`parameters.${index}.type`) ===
-                          "CategoricalParameter") && (
-                        <FormField
-                          control={form.control}
-                          name={`parameters.${index}.values`}
-                          render={({ field }) => (
-                            <FormItem className="mt-4">
-                              <FormLabel>Values</FormLabel>
-                              <FormControl>
-                                <Input
-                                  placeholder={
-                                    form.watch(`parameters.${index}.type`) ===
-                                    "NumericalDiscrete"
-                                      ? "e.g., 1, 2, 3, 4, 5"
-                                      : "e.g., Red, Green, Blue"
-                                  }
-                                  value={field.value?.join(", ") || ""}
-                                  onChange={e => {
-                                    const valuesStr = e.target.value
-                                    const values = valuesStr
-                                      .split(",")
-                                      .map(v => v.trim())
-                                      .filter(v => v)
-                                      .map(v => {
-                                        // Convert to number if NumericalDiscrete
-                                        if (
-                                          form.watch(
-                                            `parameters.${index}.type`
-                                          ) === "NumericalDiscrete" &&
-                                          !isNaN(parseFloat(v))
-                                        ) {
-                                          return parseFloat(v)
-                                        }
-                                        return v
-                                      })
-                                    field.onChange(values)
-                                  }}
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                Enter values separated by commas
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </div>
-                  ))}
-
-                  <div className="text-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setActiveTab("advanced")}
-                    >
-                      Next: Advanced Settings
-                    </Button>
-                  </div>
-                </CardContent>
-              </TabsContent>
-
-              {/* Advanced Tab */}
-              <TabsContent value="advanced" className="space-y-6">
-                <CardContent className="space-y-6">
-                  {/* Advanced Options Toggle */}
-                  <FormField
-                    control={form.control}
-                    name="useAdvancedOptions"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>Enable Advanced Options</FormLabel>
-                          <FormDescription>
-                            Configure advanced optimization settings
-                          </FormDescription>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Advanced Options */}
-                  {form.watch("useAdvancedOptions") && (
-                    <div className="space-y-6 rounded-md border p-4">
-                      {/* Multi-objective settings */}
-                      {targetFields.length > 1 && (
-                        <FormField
-                          control={form.control}
-                          name="objectiveType"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Multi-objective Strategy</FormLabel>
-                              <Select
-                                onValueChange={field.onChange}
-                                defaultValue={field.value}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select strategy" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="single">
-                                    Single Target (Primary Only)
-                                  </SelectItem>
-                                  <SelectItem value="desirability">
-                                    Desirability (Weighted Sum)
-                                  </SelectItem>
-                                  <SelectItem value="pareto">
-                                    Pareto Optimization
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormDescription>
-                                How to handle multiple optimization targets
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-
-                      {/* Recommender settings */}
-                      <FormField
-                        control={form.control}
-                        name="recommenderType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Recommender Algorithm</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value || ""}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Default (Auto-select)" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="">
-                                  Default (Auto-select)
-                                </SelectItem>
-                                {recommenderTypes.map(type => (
-                                  <SelectItem
-                                    key={type.value}
-                                    value={type.value}
-                                  >
-                                    {type.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Algorithm used to recommend parameter values
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* Acquisition function settings */}
-                      <FormField
-                        control={form.control}
-                        name="acquisitionFunction"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Acquisition Function</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value || ""}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Default (Auto-select)" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="">
-                                  Default (Auto-select)
-                                </SelectItem>
-                                {acquisitionFunctions.map(func => (
-                                  <SelectItem
-                                    key={func.value}
-                                    value={func.value}
-                                  >
-                                    {func.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Strategy for balancing exploration vs exploitation
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  )}
-
-                  {/* Constraints */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Constraints</h3>
-
-                    {constraints.length > 0 && (
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-[200px]">Type</TableHead>
-                              <TableHead>Parameters</TableHead>
-                              <TableHead className="w-[100px]">
-                                Actions
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {constraints.map((constraint, idx) => (
-                              <TableRow key={idx}>
-                                <TableCell className="font-medium">
-                                  {constraint.type}
-                                </TableCell>
-                                <TableCell>
-                                  {Array.isArray(constraint.parameters)
-                                    ? constraint.parameters.join(", ")
-                                    : "N/A"}
-                                </TableCell>
-                                <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removeConstraint(idx)}
-                                  >
-                                    <Trash className="size-4 text-red-500" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-
-                    <Accordion type="single" collapsible>
-                      <AccordionItem value="add-constraint">
-                        <AccordionTrigger>
-                          <div className="flex items-center">
-                            <Plus className="mr-2 size-4" />
-                            Add Constraint
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <ConstraintForm
-                            parameters={form.getValues("parameters")}
-                            onAddConstraint={addConstraint}
-                            existingConstraints={constraints}
-                            onRemoveConstraint={removeConstraint}
-                          />
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </div>
-                </CardContent>
-              </TabsContent>
-            </Tabs>
-
-            <CardFooter className="flex justify-between border-t p-6">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => router.push("/dashboard/optimizations")}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 size-4" />
-                    Create Optimization
-                  </>
                 )}
-              </Button>
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
+
+                {/* Constraint form */}
+                <ConstraintForm
+                  parameters={parameters}
+                  onAddConstraint={onAddConstraint}
+                  existingConstraints={constraints}
+                />
+
+                {/* Submit button for creating optimization */}
+                <div className="mt-6 flex justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep(2)}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleCreateOptimization}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="mr-2 size-4" />
+                        Create Optimization
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

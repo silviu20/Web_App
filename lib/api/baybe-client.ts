@@ -6,370 +6,286 @@ import { ActionState } from "@/types"
 /**
  * Base URL for the BayBE API
  */
-const API_BASE_URL = process.env.BAYBE_API_URL || "http://localhost:8000"
+const API_BASE_URL = process.env.NEXT_PUBLIC_BAYBE_API_URL
+const API_KEY = process.env.BAYBE_API_KEY
 
 /**
- * Handles API responses and errors consistently
+ * Check API health
  */
-async function handleResponse<T>(response: Response): Promise<ActionState<T>> {
-  if (!response.ok) {
-    let errorMessage = `API Error: ${response.status} ${response.statusText}`
-    try {
-      const errorData = await response.json()
-      errorMessage = errorData.detail || errorMessage
-    } catch (e) {
-      // Use default error message if can't parse response
-    }
-    return { isSuccess: false, message: errorMessage }
-  }
-
-  try {
-    const data = await response.json()
-    return { isSuccess: true, message: data.message || "Success", data: data }
-  } catch (error) {
-    return {
-      isSuccess: false,
-      message: `Failed to parse API response: ${(error as Error).message}`
-    }
-  }
-}
-
-/**
- * Checks the health status of the BayBE API
- */
-export async function checkAPIHealthAction(): Promise<
-  ActionState<{ status: string; using_gpu: boolean; gpu_info?: any }>
-> {
+export async function checkAPIHealthAction(): Promise<ActionState<any>> {
   try {
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: "GET",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${API_KEY}`
       }
     })
 
-    return handleResponse(response)
+    if (!response.ok) {
+      return {
+        isSuccess: false,
+        message: `API returned status: ${response.status}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("API Health check error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Creates a new optimization with the given configuration
+ * Create a new optimization
  */
 export async function createOptimizationAction(
   optimizerId: string,
-  config: {
-    parameters: any[]
-    target_config: any
-    recommender_config?: any
-    constraints?: any[]
-    objective_type?: string
-    surrogate_config?: any
-    acquisition_config?: any
-  }
-): Promise<
-  ActionState<{ status: string; message: string; constraint_count?: number }>
-> {
+  config: any
+): Promise<ActionState<any>> {
   try {
-    const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/create`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(config)
-      }
-    )
+    const response = await fetch(`${API_BASE_URL}/optimizers/${optimizerId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify(config)
+    })
 
-    return handleResponse(response)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to create optimization: ${errorText}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Create optimization error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Gets the next suggestions for experimentation
+ * Get a suggestion from the optimizer
  */
 export async function getSuggestionAction(
   optimizerId: string,
   batchSize: number = 1
-): Promise<ActionState<{ status: string; suggestions: any[] }>> {
+): Promise<ActionState<any>> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/suggest?batch_size=${batchSize}`,
+      `${API_BASE_URL}/optimizers/${optimizerId}/recommend?batch_size=${batchSize}`,
       {
         method: "GET",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`
         }
       }
     )
 
-    return handleResponse(response)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to get suggestion: ${errorText}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Get suggestion error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Adds a measurement to the optimization
+ * Add a measurement to the optimizer
  */
 export async function addMeasurementAction(
   optimizerId: string,
   parameters: Record<string, any>,
-  targetValue: number
-): Promise<ActionState<{ status: string; message: string }>> {
+  targetValue: number | Record<string, number>
+): Promise<ActionState<any>> {
   try {
+    // Prepare the request body based on whether we have a single target or multiple targets
+    let body: any
+
+    if (typeof targetValue === "number") {
+      // Single target case
+      body = {
+        parameters,
+        target_value: targetValue
+      }
+    } else {
+      // Multi-target case
+      body = {
+        parameters,
+        target_values: targetValue
+      }
+    }
+
     const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/measurement`,
+      `${API_BASE_URL}/optimizers/${optimizerId}/measurements`,
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`
         },
-        body: JSON.stringify({
-          parameters,
-          target_value: targetValue
-        })
+        body: JSON.stringify(body)
       }
     )
 
-    return handleResponse(response)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to add measurement: ${errorText}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Add measurement error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Adds multiple measurements to the optimization
+ * Add multiple measurements to the optimizer
  */
 export async function addMultipleMeasurementsAction(
   optimizerId: string,
-  measurements: { parameters: Record<string, any>; target_value: number }[]
-): Promise<ActionState<{ status: string; message: string }>> {
+  measurements: any[]
+): Promise<ActionState<any>> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/measurements`,
+      `${API_BASE_URL}/optimizers/${optimizerId}/measurements/batch`,
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`
         },
-        body: JSON.stringify({
-          measurements
-        })
+        body: JSON.stringify({ measurements })
       }
     )
 
-    return handleResponse(response)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to add measurements: ${errorText}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Add measurements error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Gets the current best point for the optimization
+ * Get the current best point from the optimizer
  */
-export async function getBestPointAction(optimizerId: string): Promise<
-  ActionState<{
-    status: string
-    best_parameters?: Record<string, any>
-    best_value?: number
-    message?: string
-  }>
-> {
+export async function getBestPointAction(
+  optimizerId: string
+): Promise<ActionState<any>> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/best`,
+      `${API_BASE_URL}/optimizers/${optimizerId}/best_point`,
       {
         method: "GET",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`
         }
       }
     )
 
-    return handleResponse(response)
-  } catch (error) {
-    return {
-      isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
-    }
-  }
-}
-
-/**
- * Loads an existing optimization
- */
-export async function loadOptimizationAction(
-  optimizerId: string
-): Promise<ActionState<{ status: string; message: string }>> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/load`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        }
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to get best point: ${errorText}`
       }
-    )
+    }
 
-    return handleResponse(response)
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Get best point error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Gets the measurement history for an optimization
- */
-export async function getMeasurementHistoryAction(
-  optimizerId: string
-): Promise<ActionState<{ measurements: any[] }>> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/history`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json"
-        }
-      }
-    )
-
-    return handleResponse(response)
-  } catch (error) {
-    return {
-      isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
-    }
-  }
-}
-
-/**
- * Gets information about an optimization campaign
- */
-export async function getCampaignInfoAction(
-  optimizerId: string
-): Promise<ActionState<{ info: any }>> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}/info`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json"
-        }
-      }
-    )
-
-    return handleResponse(response)
-  } catch (error) {
-    return {
-      isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
-    }
-  }
-}
-
-/**
- * Lists all available optimizations
- */
-export async function listOptimizationsAction(): Promise<
-  ActionState<{ optimizers: any[] }>
-> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/optimizations`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    })
-
-    return handleResponse(response)
-  } catch (error) {
-    return {
-      isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
-    }
-  }
-}
-
-/**
- * Deletes an optimization from memory (not from disk)
- */
-export async function deleteOptimizationAction(
-  optimizerId: string
-): Promise<ActionState<{ message: string }>> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/optimizations/${optimizerId}`,
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json"
-        }
-      }
-    )
-
-    return handleResponse(response)
-  } catch (error) {
-    return {
-      isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
-    }
-  }
-}
-
-/**
- * Gets feature importance insights for the optimization
+ * Get feature importance analysis
  */
 export async function getFeatureImportanceAction(
   optimizerId: string
-): Promise<ActionState<Record<string, number>>> {
+): Promise<ActionState<any>> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/insights/${optimizerId}/feature-importance`,
+      `${API_BASE_URL}/optimizers/${optimizerId}/feature_importance`,
       {
         method: "GET",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`
         }
       }
     )
 
-    return handleResponse(response)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to get feature importance: ${errorText}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Get feature importance error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Gets predictions for specific parameter values
+ * Get predictions for specific points
  */
 export async function getPredictionsAction(
   optimizerId: string,
@@ -377,27 +293,38 @@ export async function getPredictionsAction(
 ): Promise<ActionState<any>> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/insights/${optimizerId}/predictions`,
+      `${API_BASE_URL}/optimizers/${optimizerId}/predict`,
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`
         },
         body: JSON.stringify({ points })
       }
     )
 
-    return handleResponse(response)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to get predictions: ${errorText}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Get predictions error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
 
 /**
- * Exports all optimization data in the specified format
+ * Export all campaign data
  */
 export async function exportCampaignAction(
   optimizerId: string,
@@ -405,20 +332,31 @@ export async function exportCampaignAction(
 ): Promise<ActionState<any>> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/insights/${optimizerId}/export?format=${format}`,
+      `${API_BASE_URL}/optimizers/${optimizerId}/export?format=${format}`,
       {
         method: "GET",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${API_KEY}`
         }
       }
     )
 
-    return handleResponse(response)
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        isSuccess: false,
+        message: `Failed to export campaign: ${errorText}`
+      }
+    }
+
+    const data = await response.json()
+    return { isSuccess: true, data }
   } catch (error) {
+    console.error("Export campaign error:", error)
     return {
       isSuccess: false,
-      message: `Network error: ${(error as Error).message}`
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     }
   }
 }
