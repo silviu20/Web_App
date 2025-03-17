@@ -9,9 +9,8 @@ import {
   addMeasurementAction,
   addMultipleMeasurementsAction,
   getBestPointAction,
-  getFeatureImportanceAction,
-  getPredictionsAction,
-  exportCampaignAction
+  getFeatureImportanceAction,export
+
 } from "@/lib/api/baybe-client";
 
 import { 
@@ -355,6 +354,12 @@ export async function addMultiTargetMeasurementWorkflowAction(
       };
     }
     
+  //   if (Object.keys(targetValues).length === 0) {
+  //   return {
+  //     isSuccess: false,
+  //     message: "No target values provided"
+  //   };
+  // }
     // Convert target values to strings for database storage
     const targetValuesAsStrings: Record<string, string> = {};
     Object.entries(targetValues).forEach(([key, value]) => {
@@ -362,7 +367,7 @@ export async function addMultiTargetMeasurementWorkflowAction(
     });
     
     // Add measurement to our database
-    const targetName = optimization.primaryTargetName || optimization.targetName;
+    const targetName = optimization.primaryTargetName || optimization.targetName || Object.keys(targetValues)[0];
     const measurement = {
       optimizationId: optimization.id,
       parameters,
@@ -788,11 +793,13 @@ export async function exportOptimizationWorkflowAction(
 }
 
 // Helper function
+
 async function checkGPUAvailability(): Promise<{ isAvailable: boolean }> {
   try {
-    const healthCheck = await checkAPIHealthAction();
+    // INCORRECT: const healthCheck = await checkAPIHealthAction();
+    const healthCheck = await checkAPIHealth(); // FIXED: proper function name
     return {
-      isAvailable: healthCheck.isSuccess && healthCheck.data.using_gpu
+      isAvailable: healthCheck.isSuccess && healthCheck.data?.using_gpu
     };
   } catch (error) {
     console.error("Error checking GPU availability:", error);

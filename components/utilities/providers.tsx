@@ -4,16 +4,32 @@ This client component provides the providers for the app.
 
 "use client"
 
-import { TooltipProvider } from "@/components/ui/tooltip"
-import {
-  ThemeProvider as NextThemesProvider,
-  ThemeProviderProps
-} from "next-themes"
+import { ThemeProvider } from "next-themes"
+import { ReactNode } from "react"
 
-export const Providers = ({ children, ...props }: ThemeProviderProps) => {
+interface ProvidersProps {
+  children: ReactNode
+  attribute: string
+  defaultTheme: string
+  enableSystem: boolean
+  disableTransitionOnChange: boolean
+}
+
+export function Providers({
+  children,
+  attribute,
+  defaultTheme,
+  enableSystem,
+  disableTransitionOnChange
+}: ProvidersProps) {
   return (
-    <NextThemesProvider {...props}>
-      <TooltipProvider>{children}</TooltipProvider>
-    </NextThemesProvider>
+    <ThemeProvider
+      attribute={attribute}
+      defaultTheme={defaultTheme}
+      enableSystem={enableSystem}
+      disableTransitionOnChange={disableTransitionOnChange}
+    >
+      {children}
+    </ThemeProvider>
   )
 }

@@ -237,6 +237,7 @@ const discreteCustomConstraintSchema = baseConstraintSchema.extend({
 })
 
 // Union of all constraint schemas
+
 const constraintSchema = z.discriminatedUnion("type", [
   linearConstraintSchema,
   nonlinearConstraintSchema,

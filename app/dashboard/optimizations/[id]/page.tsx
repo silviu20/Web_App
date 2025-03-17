@@ -12,6 +12,7 @@ import {
 import { getBestPointWorkflowAction } from "@/actions/optimization-workflow-actions"
 import Link from "next/link"
 import { Beaker, ArrowLeft } from "lucide-react"
+import { OptimizationDashboard as OptimizationResults } from "@/components/dashboard/optimization-dashboard"
 
 interface OptimizationDetailsPageProps {
   params: Promise<{ id: string }>
